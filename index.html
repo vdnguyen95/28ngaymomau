@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>28 ngày giảm mỡ máu cùng dược sĩ Đạt</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Màn hình đăng nhập -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="logo logo-lg">28</div>
+        <h1>28 ngày giảm mỡ máu</h1>
+        <p>cùng dược sĩ Đạt</p>
+      </div>
+      <h2>Đăng nhập để bắt đầu học</h2>
+      <p class="login-hint">Nhập họ tên và số điện thoại của bạn. Tiến độ học tập sẽ được lưu riêng theo số điện thoại.</p>
+      <form id="loginForm" class="login-form">
+        <label>
+          <span>Họ và tên</span>
+          <input type="text" id="loginName" placeholder="Nguyễn Văn A" required minlength="2" maxlength="60" />
+        </label>
+        <label>
+          <span>Số điện thoại</span>
+          <input type="tel" id="loginPhone" placeholder="0xxxxxxxxx" required pattern="^(0|\+84)[0-9]{9,10}$" />
+        </label>
+        <label>
+          <span>Email <span class="label-optional">(không bắt buộc)</span></span>
+          <input type="email" id="loginEmail" placeholder="ban@email.com" autocomplete="email" />
+          <small class="field-hint">🎁 Để lại email để nhận thêm <strong>quà tặng hữu ích cho sức khỏe</strong> qua mail</small>
+        </label>
+        <div id="loginError" class="login-error hidden"></div>
+        <button type="submit" class="btn btn-primary btn-lg">Xác nhận đăng ký</button>
+      </form>
+      <div class="login-foot">
+        <small>Khi xác nhận, thông tin đăng ký sẽ được gửi qua Zalo đến dược sĩ Đạt.</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal xác nhận Zalo -->
+  <div id="zaloModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2>Xác nhận đăng ký qua Zalo</h2>
+      <p class="modal-desc">Để hoàn tất đăng ký, vui lòng gửi tin nhắn dưới đây vào Zalo của <strong>dược sĩ Đạt – 0916839623</strong>. Tin nhắn đã được sao chép sẵn, bạn chỉ cần dán và gửi.</p>
+
+      <div class="zalo-message-box">
+        <div class="zalo-message-label">Nội dung tin nhắn:</div>
+        <div class="zalo-message" id="zaloMessage"></div>
+        <button type="button" class="btn btn-secondary btn-sm" id="copyMsgBtn">📋 Sao chép lại</button>
+      </div>
+
+      <div class="modal-steps">
+        <div class="step">
+          <span class="step-num">1</span>
+          <span>Bấm <strong>"Mở Zalo dược sĩ Đạt"</strong> để mở cửa sổ chat</span>
+        </div>
+        <div class="step">
+          <span class="step-num">2</span>
+          <span>Dán tin nhắn (<kbd>Ctrl</kbd>+<kbd>V</kbd>) và nhấn <strong>Gửi</strong></span>
+        </div>
+        <div class="step">
+          <span class="step-num">3</span>
+          <span>Quay lại đây, bấm <strong>"Tôi đã gửi, bắt đầu học"</strong></span>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <a class="btn btn-primary" id="openZaloBtn" target="_blank" rel="noopener">💬 Mở Zalo dược sĩ Đạt</a>
+        <button type="button" class="btn btn-secondary" id="confirmSentBtn">Tôi đã gửi, bắt đầu học</button>
+      </div>
+
+      <button type="button" class="modal-close" id="cancelZaloBtn" aria-label="Đóng">×</button>
+    </div>
+  </div>
+
+  <!-- Ứng dụng -->
+  <div id="app" class="hidden">
+    <header class="site-header">
+      <div class="container header-inner">
+        <div class="brand">
+          <div class="logo">28</div>
+          <div class="brand-text">
+            <h1>28 ngày giảm mỡ máu</h1>
+            <p>cùng dược sĩ Đạt</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <div class="user-chip" id="userChip" title="Tài khoản">
+            <span class="user-avatar" id="userAvatar">?</span>
+            <div class="user-meta">
+              <div class="user-name" id="userName"></div>
+              <div class="user-phone" id="userPhone"></div>
+            </div>
+          </div>
+          <div class="progress-summary" id="progressSummary">0 / 28 bài</div>
+          <button class="btn btn-ghost" id="historyBtn" title="Xem lịch sử học tập">Lịch sử</button>
+          <button class="btn btn-ghost" id="logoutBtn" title="Đăng xuất">Đăng xuất</button>
+        </div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    </header>
+
+    <main class="container main-layout">
+      <aside class="sidebar">
+        <h2>Danh sách bài học</h2>
+        <ul id="lessonList" class="lesson-list"></ul>
+      </aside>
+
+      <section class="content-area">
+        <div id="welcome" class="welcome-card">
+          <h2>Xin chào, <span id="welcomeName"></span>!</h2>
+          <p>Chào mừng bạn đến với chương trình 28 ngày giảm mỡ máu của dược sĩ Đạt. Tiến độ của bạn đã được lưu theo số điện thoại và sẽ tiếp tục ở lần sau.</p>
+          <ul class="welcome-list">
+            <li>✓ 28 bài học ngắn, dễ áp dụng</li>
+            <li>✓ Hoàn thành bài kiểm tra (đạt ≥ 70%) để mở bài tiếp theo</li>
+            <li>✓ Lịch sử học tập được lưu riêng cho bạn</li>
+          </ul>
+          <button class="btn btn-primary btn-lg" id="startBtn">Tiếp tục học</button>
+        </div>
+
+        <article id="lessonView" class="lesson-view hidden"></article>
+        <section id="quizView" class="quiz-view hidden"></section>
+        <section id="historyView" class="lesson-view hidden"></section>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>© 2026 · 28 ngày giảm mỡ máu cùng dược sĩ Đạt · Nội dung mang tính giáo dục, không thay thế tư vấn y khoa.</p>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Nút nổi: Nhắn dược sĩ Đạt tư vấn -->
+  <a href="https://zalo.me/0916839623" target="_blank" rel="noopener" class="zalo-fab" id="zaloFab" title="Nhắn Zalo dược sĩ Đạt">
+    <span class="zalo-fab-icon">💬</span>
+    <span class="zalo-fab-text">Nhắn dược sĩ Đạt tư vấn</span>
+  </a>
+
+  <!-- Giao diện quản trị -->
+  <div id="adminScreen" class="admin-screen hidden">
+    <header class="admin-header">
+      <div class="container header-inner">
+        <div class="brand">
+          <div class="logo">⚙️</div>
+          <div class="brand-text">
+            <h1>Bảng quản trị</h1>
+            <p>28 ngày giảm mỡ máu cùng dược sĩ Đạt</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-ghost" id="exportCsvBtn">📥 Xuất CSV</button>
+          <button class="btn btn-ghost" id="refreshAdminBtn">↻ Làm mới</button>
+          <a class="btn btn-ghost" href="?">Thoát</a>
+        </div>
+      </div>
+    </header>
+    <main class="container" style="padding: 24px 20px;">
+      <div id="adminStats" class="admin-stats"></div>
+      <div class="admin-card">
+        <h2>Danh sách học viên</h2>
+        <div id="adminUsers"></div>
+      </div>
+      <div class="admin-card">
+        <h2>Lịch sử liên hệ Zalo</h2>
+        <div id="adminContacts"></div>
+      </div>
+      <div class="admin-note">
+        <strong>Lưu ý:</strong> Dữ liệu được đọc từ trình duyệt hiện tại. Học viên đăng ký trên thiết bị khác sẽ không xuất hiện ở đây trừ khi tích hợp backend (Firebase / Google Sheets).
+      </div>
+    </main>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
