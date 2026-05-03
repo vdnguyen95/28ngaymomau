@@ -1,0 +1,8 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=$HOME/public_html/28ngaymomau/
+    - /bin/cp -R index.html  $DEPLOYPATH
+    - /bin/cp -R styles.css  $DEPLOYPATH
+    - /bin/cp -R data.js     $DEPLOYPATH
+    - /bin/cp -R app.js      $DEPLOYPATH
