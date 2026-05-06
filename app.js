@@ -14,22 +14,15 @@ const BACKEND_URL = "";  // Ví dụ: "https://script.google.com/macros/s/AKfycb
 const BACKEND_ADMIN_KEY = "duocsidat-admin-2026"; // PHẢI khớp ADMIN_KEY trong file .gs
 
 // =========================================================================
-// CẤU HÌNH GETRESPONSE - chọn 1 trong 2 cách:
-//
-// CÁCH A (gọi trực tiếp từ trình duyệt – nhanh, KHÔNG AN TOÀN vì lộ API key):
-//   - Điền GR_API_KEY và GR_CAMPAIGN_ID
-//   - Bỏ trống GR_WEBHOOK_URL
-//
-// CÁCH B (an toàn – qua backend proxy / webhook bạn tự dựng):
-//   - Điền GR_WEBHOOK_URL (URL Cloudflare Workers / Vercel / Apps Script)
-//   - Backend nhận POST { name, email, phone, program } và gọi GetResponse
-//   - Có thể bỏ trống GR_API_KEY, GR_CAMPAIGN_ID
-//
-// Nếu cả 2 đều rỗng, email sẽ chỉ được lưu cục bộ và đưa vào tin nhắn Zalo.
+// CẤU HÌNH GETRESPONSE
+// API key được giữ trên Cloudflare Worker (server side, không lộ).
+// Frontend chỉ gọi đến Worker URL bên dưới.
 // =========================================================================
-const GR_API_KEY = "";          // Ví dụ: "abc123..."  (KHÔNG khuyến nghị nhúng vào trang public)
-const GR_CAMPAIGN_ID = "";      // Ví dụ: "AbC1d"  – ID list / campaign trong GetResponse
-const GR_WEBHOOK_URL = "";      // Ví dụ: "https://your-worker.workers.dev/subscribe"  – ưu tiên cách này
+const GR_API_KEY = "";   // KHÔNG ĐIỀN ở đây – key đã chuyển sang Cloudflare Worker
+const GR_LIST_NAME = "28_ngay_mo_mau";
+const GR_CAMPAIGN_ID = "";
+const GR_WEBHOOK_URL = "https://get28.vdnguyen95.workers.dev";  // Cloudflare Worker proxy
+const GR_CACHE_KEY = "momau28_gr_campaign_id_v1";
 
 // Chế độ xem trước (mở khóa toàn bộ bài học để admin/giáo viên duyệt nội dung).
 // Bật bằng cách mở trang với URL ?preview=1
@@ -67,6 +60,8 @@ const el = {
   startBtn: document.getElementById("startBtn"),
   logoutBtn: document.getElementById("logoutBtn"),
   historyBtn: document.getElementById("historyBtn"),
+  leaderboardBtn: document.getElementById("leaderboardBtn"),
+  leaderboardView: document.getElementById("leaderboardView"),
   progressFill: document.getElementById("progressFill"),
   progressSummary: document.getElementById("progressSummary"),
 };
@@ -141,9 +136,14 @@ function login(name, phone, email) {
   localStorage.setItem(SESSION_KEY, phone);
   currentUser = user;
 
-  // Đồng bộ email vào GetResponse (chạy nền, không chặn UX)
+  // Đồng bộ email vào GetResponse + toast thông báo quà tặng
   if (cleanEmail) {
-    syncToGetResponse({ name: user.name, email: cleanEmail, phone, program: PROGRAM_NAME });
+    syncToGetResponse({ name: user.name, email: cleanEmail, phone, program: PROGRAM_NAME })
+      .then((ok) => {
+        if (ok) {
+          showCopyToast("🎁 Quà tặng đã được gửi vào email " + cleanEmail);
+        }
+      });
   }
 
   // Đồng bộ đăng ký vào backend (Google Sheets)
@@ -570,6 +570,195 @@ function openHistory() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+// ---------- Bảng xếp hạng ----------
+const SIM_USERS_KEY = "momau28_sim_users_v1";
+
+function makeSimulatedUsers() {
+  // Tạo 12 học viên ảo có tên/thành phố Việt Nam, tiến độ đa dạng
+  const cached = localStorage.getItem(SIM_USERS_KEY);
+  if (cached) {
+    try {
+      const data = JSON.parse(cached);
+      if (data && Array.isArray(data.users) && data.users.length) {
+        // Cập nhật tự nhiên: cứ ~24h thì 30% học viên ảo tiến thêm 1 ngày
+        const lastUpdated = data.lastUpdated || 0;
+        const elapsed = Date.now() - lastUpdated;
+        if (elapsed > 24 * 3600 * 1000) {
+          data.users.forEach((u) => {
+            if (u.completed < 28 && Math.random() < 0.3) {
+              u.completed = Math.min(28, u.completed + 1);
+              u.currentDay = Math.min(28, u.completed + 1);
+              u.lastActivity = Date.now();
+            }
+          });
+          data.lastUpdated = Date.now();
+          localStorage.setItem(SIM_USERS_KEY, JSON.stringify(data));
+        }
+        return data.users;
+      }
+    } catch (e) {}
+  }
+  // Lần đầu: tạo 12 học viên ảo
+  const users = [];
+  const used = new Set();
+  for (let i = 0; i < 12; i++) {
+    let name;
+    do {
+      const last = NOTIF_HOLO_NAMES[0][Math.floor(Math.random() * NOTIF_HOLO_NAMES[0].length)];
+      const mid  = NOTIF_HOLO_NAMES[1][Math.floor(Math.random() * NOTIF_HOLO_NAMES[1].length)];
+      const first = NOTIF_HOLO_NAMES[2][Math.floor(Math.random() * NOTIF_HOLO_NAMES[2].length)];
+      name = `${last} ${mid} ${first}`;
+    } while (used.has(name));
+    used.add(name);
+
+    const completed = 3 + Math.floor(Math.random() * 25); // 3-27 ngày
+    users.push({
+      id: "sim_" + i,
+      name,
+      city: NOTIF_CITIES[Math.floor(Math.random() * NOTIF_CITIES.length)],
+      phoneSuffix: String(100 + Math.floor(Math.random() * 900)),
+      completed,
+      currentDay: Math.min(28, completed + 1),
+      joinedDaysAgo: 5 + Math.floor(Math.random() * 25),
+      lastActivity: Date.now() - Math.floor(Math.random() * 24 * 3600 * 1000),
+      isSimulated: true,
+    });
+  }
+  localStorage.setItem(SIM_USERS_KEY, JSON.stringify({ users, lastUpdated: Date.now() }));
+  return users;
+}
+
+function maskName(name) {
+  // "Nguyễn Văn An" → "Nguyễn V. A***"
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return `${parts[0]} ${parts[1][0]}.`;
+  return `${parts[0]} ${parts[1][0]}. ${parts[2]}`;
+}
+
+function getInitial(name) {
+  const parts = name.trim().split(/\s+/);
+  return (parts[parts.length - 1][0] || "?").toUpperCase();
+}
+
+function buildLeaderboardData() {
+  // Học viên thật trên thiết bị này
+  const realUsers = Object.values(loadUsers()).map((u) => ({
+    id: "real_" + u.phone,
+    name: u.name,
+    city: "Học viên",
+    phoneSuffix: u.phone.slice(-3),
+    completed: (u.completed || []).length,
+    currentDay: u.currentDay || 1,
+    isMe: currentUser && u.phone === currentUser.phone,
+    isSimulated: false,
+  }));
+  const simUsers = makeSimulatedUsers();
+  // Gộp lại + sort theo số bài hoàn thành giảm dần, trùng thì sort theo currentDay
+  const all = [...realUsers, ...simUsers]
+    .filter((u) => u.id !== "real_preview") // bỏ tài khoản preview
+    .sort((a, b) => {
+      if (b.completed !== a.completed) return b.completed - a.completed;
+      return (b.currentDay || 0) - (a.currentDay || 0);
+    });
+  return all;
+}
+
+function openLeaderboard() {
+  el.lessonView.classList.add("hidden");
+  el.welcome.classList.add("hidden");
+  el.quizView.classList.add("hidden");
+  el.historyView.classList.add("hidden");
+  el.leaderboardView.classList.remove("hidden");
+
+  const all = buildLeaderboardData();
+  const top3 = all.slice(0, 3);
+  const rest = all.slice(3, 30);
+
+  // Tìm thứ hạng của user hiện tại
+  const myRank = all.findIndex((u) => u.isMe) + 1;
+  const me = currentUser ? all.find((u) => u.isMe) : null;
+
+  const podiumHtml = `
+    <div class="leaderboard-podium">
+      ${top3[1] ? podiumCard(top3[1], "silver", "🥈", 2) : "<div></div>"}
+      ${top3[0] ? podiumCard(top3[0], "gold",   "🥇", 1) : "<div></div>"}
+      ${top3[2] ? podiumCard(top3[2], "bronze", "🥉", 3) : "<div></div>"}
+    </div>
+  `;
+
+  const tableRows = rest.map((u, i) => {
+    const rank = i + 4;
+    const pct = Math.round((u.completed / 28) * 100);
+    return `
+      <tr class="${u.isMe ? "me" : ""}">
+        <td class="rank">${rank}</td>
+        <td>
+          <span class="lb-avatar">${getInitial(u.name)}</span>
+          ${u.isMe ? "<strong>" + u.name + " (Bạn)</strong>" : maskName(u.name)}
+        </td>
+        <td>${u.city}</td>
+        <td>
+          <span class="lb-progress"><span style="width:${pct}%"></span></span>
+          <span class="pct">${u.completed}/28</span>
+        </td>
+        <td>Ngày ${u.currentDay}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const myBanner = me
+    ? `<div class="leaderboard-mine-banner">
+        🏅 Bạn đang ở <strong>vị trí #${myRank}</strong> với <strong>${me.completed}/28 bài</strong>.
+        ${me.completed < 28 ? "Cố lên! Vượt qua thêm vài học viên nữa nhé." : "Tuyệt vời, bạn đã hoàn thành chương trình!"}
+      </div>`
+    : "";
+
+  el.leaderboardView.innerHTML = `
+    <div class="lesson-header">
+      <span class="lesson-day">🏆 Bảng xếp hạng</span>
+      <h2>Top học viên 28 ngày giảm mỡ máu</h2>
+      <p class="lesson-subtitle">Xem ai đang dẫn đầu và thi đua cùng họ nhé!</p>
+    </div>
+    ${myBanner}
+    ${podiumHtml}
+    <table class="leaderboard-table">
+      <thead>
+        <tr>
+          <th class="rank">#</th>
+          <th>Học viên</th>
+          <th>Địa điểm</th>
+          <th>Tiến độ</th>
+          <th>Đang học</th>
+        </tr>
+      </thead>
+      <tbody>${tableRows || `<tr><td colspan="5" style="text-align:center; color:var(--gray-400); padding: 20px;">Chưa có dữ liệu</td></tr>`}</tbody>
+    </table>
+    <div class="lesson-actions">
+      <button class="btn btn-primary" id="backFromLeaderboard">Quay lại học</button>
+    </div>
+  `;
+  document.getElementById("backFromLeaderboard").addEventListener("click", () => {
+    el.leaderboardView.classList.add("hidden");
+    const day = currentUser.currentDay || 1;
+    if (isUnlocked(day)) openLesson(day);
+    else el.welcome.classList.remove("hidden");
+  });
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function podiumCard(u, kind, medal, rank) {
+  return `
+    <div class="podium ${kind} ${u.isMe ? "is-me" : ""}">
+      <span class="medal">${medal}</span>
+      <div class="podium-name">${u.isMe ? u.name + " (Bạn)" : maskName(u.name)}</div>
+      <div class="podium-city">${u.city}</div>
+      <div class="podium-score">${u.completed}/28</div>
+      <div class="podium-score-label">bài hoàn thành</div>
+    </div>
+  `;
+}
+
 // ---------- Event binding ----------
 el.loginForm.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -589,24 +778,41 @@ el.loginForm.addEventListener("submit", (e) => {
     return;
   }
   el.loginError.classList.add("hidden");
-  openZaloConfirm(name, phone, email);
+  login(name, phone, email);
 });
 
-// ---------- Xác nhận đăng ký qua Zalo ----------
-function buildRegistrationMessage(name, phone, email) {
-  const lines = [
-    "XÁC NHẬN ĐĂNG KÝ",
-    `Tên: ${name}`,
-    `Số điện thoại: ${phone}`,
-  ];
-  if (email && email.trim()) lines.push(`Email: ${email.trim()}`);
-  lines.push(`Đăng ký chương trình: ${PROGRAM_NAME}`);
-  return lines.join("\n");
-}
 
 // ---------- Đồng bộ GetResponse ----------
+async function fetchCampaignIdByName(name) {
+  // Lấy từ cache nếu đã từng tra cứu thành công
+  const cached = localStorage.getItem(GR_CACHE_KEY);
+  if (cached) return cached;
+  try {
+    const url = "https://api.getresponse.com/v3/campaigns?" +
+      new URLSearchParams({ "query[name]": name });
+    const res = await fetch(url, {
+      headers: { "X-Auth-Token": `api-key ${GR_API_KEY}` },
+    });
+    if (!res.ok) {
+      console.warn("[GR] Không tra được campaign:", res.status, await res.text());
+      return null;
+    }
+    const list = await res.json();
+    if (!list.length) {
+      console.warn(`[GR] Không tìm thấy danh sách "${name}"`);
+      return null;
+    }
+    const id = list[0].campaignId;
+    localStorage.setItem(GR_CACHE_KEY, id);
+    return id;
+  } catch (e) {
+    console.warn("[GR] Lỗi tra cứu campaign:", e);
+    return null;
+  }
+}
+
 async function syncToGetResponse(data) {
-  // Cách B: webhook backend (an toàn, được ưu tiên)
+  // Phương án 1 (an toàn): qua webhook proxy
   if (GR_WEBHOOK_URL) {
     try {
       const res = await fetch(GR_WEBHOOK_URL, {
@@ -614,43 +820,55 @@ async function syncToGetResponse(data) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) console.warn("[GetResponse webhook]", res.status, await res.text());
-      else console.log("[GetResponse webhook] OK");
+      if (!res.ok) console.warn("[GR webhook]", res.status, await res.text());
+      else console.log("[GR webhook] OK");
     } catch (e) {
-      console.warn("[GetResponse webhook] error", e);
+      console.warn("[GR webhook] error", e);
     }
-    return;
+    return true;
   }
 
-  // Cách A: gọi trực tiếp API GetResponse từ trình duyệt
-  if (GR_API_KEY && GR_CAMPAIGN_ID) {
-    try {
-      const res = await fetch("https://api.getresponse.com/v3/contacts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Auth-Token": `api-key ${GR_API_KEY}`,
-        },
-        body: JSON.stringify({
-          name: data.name,
-          email: data.email,
-          campaign: { campaignId: GR_CAMPAIGN_ID },
-          customFieldValues: [
-            // Nếu bạn đã tạo custom field "phone" trong GetResponse, có thể bật:
-            // { customFieldId: "<id>", value: [data.phone] }
-          ],
-        }),
-      });
-      if (!res.ok) console.warn("[GetResponse API]", res.status, await res.text());
-      else console.log("[GetResponse API] đã thêm contact");
-    } catch (e) {
-      console.warn("[GetResponse API] error", e);
-    }
-    return;
+  // Phương án 2: gọi thẳng API (lộ API key – chấp nhận trade-off)
+  if (!GR_API_KEY) {
+    console.info("[GR] chưa cấu hình API key – bỏ qua.");
+    return false;
   }
 
-  // Không có cấu hình – chỉ ghi log
-  console.info("[GetResponse] chưa cấu hình API key/webhook – bỏ qua đồng bộ.");
+  const campaignId = GR_CAMPAIGN_ID || (await fetchCampaignIdByName(GR_LIST_NAME));
+  if (!campaignId) return false;
+
+  try {
+    const res = await fetch("https://api.getresponse.com/v3/contacts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Auth-Token": `api-key ${GR_API_KEY}`,
+      },
+      body: JSON.stringify({
+        name: data.name,
+        email: data.email,
+        campaign: { campaignId },
+        // Nếu sau này bạn tạo custom field "phone" trong GetResponse, bật bên dưới:
+        // customFieldValues: [{ customFieldId: "<id>", value: [data.phone] }],
+      }),
+    });
+    if (res.ok || res.status === 202) {
+      console.log("[GR] Đã thêm contact:", data.email);
+      return true;
+    }
+    const errBody = await res.text();
+    // 409 = email đã có trong list → coi như thành công
+    if (res.status === 409) {
+      console.log("[GR] Contact đã tồn tại:", data.email);
+      return true;
+    }
+    console.warn("[GR API]", res.status, errBody);
+    return false;
+  } catch (e) {
+    // CORS bị chặn ở một số trình duyệt → log để bạn biết, không phá UX
+    console.warn("[GR API] Lỗi mạng/CORS:", e);
+    return false;
+  }
 }
 
 async function copyToClipboard(text) {
@@ -684,56 +902,6 @@ function showCopyToast(text) {
   setTimeout(() => t.remove(), 2100);
 }
 
-function openZaloConfirm(name, phone, email) {
-  const message = buildRegistrationMessage(name, phone, email);
-  const modal = document.getElementById("zaloModal");
-  const msgEl = document.getElementById("zaloMessage");
-  const openZaloBtn = document.getElementById("openZaloBtn");
-  const confirmSentBtn = document.getElementById("confirmSentBtn");
-  const cancelBtn = document.getElementById("cancelZaloBtn");
-  const copyBtn = document.getElementById("copyMsgBtn");
-
-  msgEl.textContent = message;
-  openZaloBtn.href = `https://zalo.me/${ADMIN_ZALO}`;
-
-  modal.classList.remove("hidden");
-
-  // Tự động copy ngay khi mở modal
-  copyToClipboard(message).then((ok) => {
-    if (ok) showCopyToast("Đã sao chép tin nhắn vào bộ nhớ");
-  });
-
-  const close = () => {
-    modal.classList.add("hidden");
-    openZaloBtn.onclick = null;
-    confirmSentBtn.onclick = null;
-    cancelBtn.onclick = null;
-    copyBtn.onclick = null;
-  };
-
-  copyBtn.onclick = async () => {
-    const ok = await copyToClipboard(message);
-    showCopyToast(ok ? "Đã sao chép tin nhắn" : "Không sao chép được, vui lòng copy thủ công");
-  };
-
-  openZaloBtn.onclick = () => {
-    // Copy lại ngay khi bấm mở Zalo để chắc chắn clipboard có tin nhắn
-    copyToClipboard(message);
-    // Ghi nhận lần liên hệ Zalo (nguồn từ form đăng ký)
-    const list = loadContacts();
-    list.push({ at: Date.now(), source: "register", name, phone });
-    saveContacts(list);
-    syncToBackend("event", { type: "zalo_contact", name, phone, detail: "register" });
-  };
-
-  confirmSentBtn.onclick = () => {
-    close();
-    // Đăng nhập/tạo tài khoản sau khi người dùng xác nhận đã gửi tin nhắn
-    login(name, phone, email);
-  };
-
-  cancelBtn.onclick = close;
-}
 
 function showLoginError(msg) {
   el.loginError.textContent = msg;
@@ -742,6 +910,7 @@ function showLoginError(msg) {
 
 el.logoutBtn.addEventListener("click", logout);
 el.historyBtn.addEventListener("click", openHistory);
+el.leaderboardBtn.addEventListener("click", openLeaderboard);
 el.startBtn.addEventListener("click", () => openLesson(currentUser.currentDay || 1));
 
 // ---------- Social proof notifications ----------

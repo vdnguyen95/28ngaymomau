@@ -7,3 +7,9 @@ desktop.ini
 node_modules/
 .env
 .env.local
+
+# Worker code – chỉ paste vào Cloudflare dashboard, không deploy với site
+cloudflare-worker-getresponse.js
+
+# Script deploy local – không cần đẩy lên GitHub
+deploy.bat

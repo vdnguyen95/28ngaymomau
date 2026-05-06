@@ -365,6 +365,138 @@ body {
   justify-content: flex-end;
 }
 
+/* Leaderboard */
+.leaderboard-podium {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1fr;
+  gap: 12px;
+  align-items: end;
+  margin: 20px 0 24px;
+}
+.podium {
+  background: var(--green-50);
+  border: 1px solid var(--green-200);
+  border-radius: 12px;
+  padding: 14px 10px;
+  text-align: center;
+  position: relative;
+}
+.podium .medal {
+  font-size: 32px;
+  margin-bottom: 4px;
+  display: block;
+}
+.podium .podium-name {
+  font-weight: 700;
+  color: var(--green-800);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.podium .podium-city {
+  color: var(--gray-600);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.podium .podium-score {
+  margin-top: 8px;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--green-700);
+}
+.podium .podium-score-label {
+  font-size: 11px;
+  color: var(--gray-600);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.podium.gold {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-color: #f59e0b;
+  transform: translateY(-8px);
+}
+.podium.silver { background: linear-gradient(135deg, #f3f4f6, #e5e7eb); border-color: #9ca3af; }
+.podium.bronze { background: linear-gradient(135deg, #fde0c4, #fbbf95); border-color: #d97706; }
+
+.leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.leaderboard-table th, .leaderboard-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--gray-200);
+}
+.leaderboard-table th {
+  background: var(--green-50);
+  color: var(--green-800);
+  font-weight: 600;
+  font-size: 13px;
+}
+.leaderboard-table tbody tr:hover td { background: var(--gray-50); }
+.leaderboard-table .rank {
+  width: 50px;
+  font-weight: 700;
+  color: var(--gray-600);
+  text-align: center;
+}
+.leaderboard-table .lb-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--green-600);
+  color: #fff;
+  display: inline-grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 13px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.leaderboard-table tr.me td { background: linear-gradient(90deg, #fef3c7, transparent); font-weight: 600; }
+.leaderboard-table tr.me .rank { color: #d97706; }
+.leaderboard-table .lb-progress {
+  display: inline-block;
+  width: 90px;
+  height: 6px;
+  background: var(--gray-200);
+  border-radius: 3px;
+  overflow: hidden;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.leaderboard-table .lb-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--green-500);
+}
+.leaderboard-table .pct {
+  font-size: 12px;
+  color: var(--gray-600);
+  margin-left: 4px;
+}
+.leaderboard-mine-banner {
+  background: var(--green-50);
+  border: 1px solid var(--green-200);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--green-800);
+  font-size: 14px;
+}
+.leaderboard-mine-banner strong { color: var(--green-700); }
+
+@media (max-width: 600px) {
+  .leaderboard-podium { grid-template-columns: 1fr; gap: 8px; }
+  .podium.gold { transform: none; order: -1; }
+  .leaderboard-table th, .leaderboard-table td { padding: 8px; font-size: 12px; }
+  .leaderboard-table .lb-progress { width: 60px; }
+}
+
 /* Submitted gallery in history */
 .submission-gallery {
   display: grid;
@@ -985,6 +1117,47 @@ body {
   padding: 6px 10px;
   border-radius: 6px;
   border-left: 3px solid var(--green-400);
+}
+
+.email-gift-box {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border: 1px solid #f59e0b;
+  border-radius: 10px;
+  padding: 14px 16px;
+  position: relative;
+}
+.email-gift-box::before {
+  content: "GIFT";
+  position: absolute;
+  top: -8px;
+  right: 14px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: 1px;
+}
+.email-gift-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #92400e;
+  margin-bottom: 8px;
+}
+.email-gift-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.email-gift-list li {
+  font-size: 13px;
+  color: #78350f;
+  padding: 3px 0;
+  line-height: 1.4;
+}
+.email-gift-list li strong {
+  color: #78350f;
 }
 .login-error {
   background: #fef2f2;

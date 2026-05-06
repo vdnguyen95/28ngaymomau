@@ -26,55 +26,27 @@
           <span>Số điện thoại</span>
           <input type="tel" id="loginPhone" placeholder="0xxxxxxxxx" required pattern="^(0|\+84)[0-9]{9,10}$" />
         </label>
+        <div class="email-gift-box">
+          <div class="email-gift-title">🎁 Tặng ngay khi để lại email:</div>
+          <ul class="email-gift-list">
+            <li>📋 <strong>Thực đơn 28 ngày</strong> giảm mỡ máu</li>
+            <li>🥗 <strong>Danh sách thực phẩm</strong> nên ăn / cần tránh</li>
+            <li>📖 <strong>Cẩm nang mỡ máu</strong> từ dược sĩ Đạt</li>
+          </ul>
+        </div>
         <label>
           <span>Email <span class="label-optional">(không bắt buộc)</span></span>
           <input type="email" id="loginEmail" placeholder="ban@email.com" autocomplete="email" />
-          <small class="field-hint">🎁 Để lại email để nhận thêm <strong>quà tặng hữu ích cho sức khỏe</strong> qua mail</small>
         </label>
         <div id="loginError" class="login-error hidden"></div>
         <button type="submit" class="btn btn-primary btn-lg">Xác nhận đăng ký</button>
       </form>
       <div class="login-foot">
-        <small>Khi xác nhận, thông tin đăng ký sẽ được gửi qua Zalo đến dược sĩ Đạt.</small>
+        <small>Tiến độ học tập sẽ được lưu lại theo số điện thoại của bạn.</small>
       </div>
     </div>
   </div>
 
-  <!-- Modal xác nhận Zalo -->
-  <div id="zaloModal" class="modal-overlay hidden">
-    <div class="modal-card">
-      <h2>Xác nhận đăng ký qua Zalo</h2>
-      <p class="modal-desc">Để hoàn tất đăng ký, vui lòng gửi tin nhắn dưới đây vào Zalo của <strong>dược sĩ Đạt – 0916839623</strong>. Tin nhắn đã được sao chép sẵn, bạn chỉ cần dán và gửi.</p>
-
-      <div class="zalo-message-box">
-        <div class="zalo-message-label">Nội dung tin nhắn:</div>
-        <div class="zalo-message" id="zaloMessage"></div>
-        <button type="button" class="btn btn-secondary btn-sm" id="copyMsgBtn">📋 Sao chép lại</button>
-      </div>
-
-      <div class="modal-steps">
-        <div class="step">
-          <span class="step-num">1</span>
-          <span>Bấm <strong>"Mở Zalo dược sĩ Đạt"</strong> để mở cửa sổ chat</span>
-        </div>
-        <div class="step">
-          <span class="step-num">2</span>
-          <span>Dán tin nhắn (<kbd>Ctrl</kbd>+<kbd>V</kbd>) và nhấn <strong>Gửi</strong></span>
-        </div>
-        <div class="step">
-          <span class="step-num">3</span>
-          <span>Quay lại đây, bấm <strong>"Tôi đã gửi, bắt đầu học"</strong></span>
-        </div>
-      </div>
-
-      <div class="modal-actions">
-        <a class="btn btn-primary" id="openZaloBtn" target="_blank" rel="noopener">💬 Mở Zalo dược sĩ Đạt</a>
-        <button type="button" class="btn btn-secondary" id="confirmSentBtn">Tôi đã gửi, bắt đầu học</button>
-      </div>
-
-      <button type="button" class="modal-close" id="cancelZaloBtn" aria-label="Đóng">×</button>
-    </div>
-  </div>
 
   <!-- Ứng dụng -->
   <div id="app" class="hidden">
@@ -96,6 +68,7 @@
             </div>
           </div>
           <div class="progress-summary" id="progressSummary">0 / 28 bài</div>
+          <button class="btn btn-ghost" id="leaderboardBtn" title="Bảng xếp hạng học viên">🏆 Xếp hạng</button>
           <button class="btn btn-ghost" id="historyBtn" title="Xem lịch sử học tập">Lịch sử</button>
           <button class="btn btn-ghost" id="logoutBtn" title="Đăng xuất">Đăng xuất</button>
         </div>
@@ -124,6 +97,7 @@
         <article id="lessonView" class="lesson-view hidden"></article>
         <section id="quizView" class="quiz-view hidden"></section>
         <section id="historyView" class="lesson-view hidden"></section>
+        <section id="leaderboardView" class="lesson-view hidden"></section>
       </section>
     </main>
 
