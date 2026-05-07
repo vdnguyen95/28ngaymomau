@@ -275,7 +275,10 @@ function getCooldownRemaining(day) {
   // Trả về số ms còn lại đến khi mở khóa; null nếu không trong cooldown.
   // Cơ chế: mở khóa vào 00:00:00 của ngày SAU ngày hoàn thành bài trước.
   if (PREVIEW_MODE || day === 1 || !COOLDOWN_NEXT_DAY) return null;
-  if (!currentUser || !currentUser.completed.includes(day - 1)) return null;
+  if (!currentUser) return null;
+  // Bài đã hoàn thành thì không có cooldown
+  if (currentUser.completed.includes(day)) return null;
+  if (!currentUser.completed.includes(day - 1)) return null;
   const prevTime = getCompletionTime(day - 1);
   if (!prevTime) return null;
   const unlockAt = new Date(prevTime);
@@ -287,7 +290,9 @@ function getCooldownRemaining(day) {
 function getUnlockDate(day) {
   // Trả về Date object thời điểm bài `day` sẽ mở khóa (hoặc null)
   if (PREVIEW_MODE || day === 1 || !COOLDOWN_NEXT_DAY) return null;
-  if (!currentUser || !currentUser.completed.includes(day - 1)) return null;
+  if (!currentUser) return null;
+  if (currentUser.completed.includes(day)) return null;
+  if (!currentUser.completed.includes(day - 1)) return null;
   const prevTime = getCompletionTime(day - 1);
   if (!prevTime) return null;
   const d = new Date(prevTime);
