@@ -1462,6 +1462,9 @@ async function renderAdmin() {
   // Khu xem học viên đã đạt huy hiệu
   renderBadgeAchievers(allUsers);
 
+  // Khu xem trước mẫu huy hiệu
+  await renderBadgePreview();
+
   // Nút làm mới
   document.getElementById("refreshAdminBtn").onclick = renderAdmin;
 
@@ -1666,6 +1669,60 @@ async function renderGiftManager(pwd) {
     const j = await r.json();
     alert(j.ok ? "Đã lưu quà tặng" : (j.error || "Lỗi"));
   });
+}
+
+// ---------- Admin: xem trước mẫu huy hiệu ----------
+async function renderBadgePreview() {
+  let card = document.getElementById("badgePreviewCard");
+  if (!card) {
+    card = document.createElement("div");
+    card.className = "admin-card";
+    card.id = "badgePreviewCard";
+    document.querySelector("#adminScreen main.container").insertBefore(
+      card, document.querySelector("#adminScreen .admin-note")
+    );
+  }
+  card.innerHTML = `
+    <h2>🎨 Xem trước mẫu huy hiệu</h2>
+    <p style="color: var(--gray-600); font-size: 13px; margin-bottom: 14px;">
+      Đây là mẫu huy hiệu mà học viên sẽ nhận được. Bấm "Tải" để download mẫu PNG xem chi tiết.
+    </p>
+    <div id="badgePreviewGrid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;"></div>
+  `;
+  const grid = document.getElementById("badgePreviewGrid");
+  const sampleName = "Nguyễn Văn An";
+  const tiers = [
+    { days: 7,  label: "Tuần 1 — Ngày 7" },
+    { days: 14, label: "Tuần 2 — Ngày 14" },
+    { days: 21, label: "Tuần 3 — Ngày 21" },
+    { days: 28, label: "🏆 Bằng vinh danh 28 ngày" },
+  ];
+  for (const t of tiers) {
+    const item = document.createElement("div");
+    item.style.cssText = "border:1px solid var(--gray-200); border-radius:10px; padding:10px; text-align:center;";
+    item.innerHTML = `<div style="font-weight:600; font-size:13px; color:var(--green-700); margin-bottom:8px;">${t.label}</div><div class="preview-canvas-wrap"></div><button class="btn btn-secondary btn-sm" data-preview-days="${t.days}" style="margin-top:8px;">📥 Tải mẫu</button>`;
+    grid.appendChild(item);
+    const canvas = await generateBadgeCanvas({
+      name: sampleName,
+      daysCompleted: t.days,
+      avatarUrl: "",          // dùng chữ cái đầu
+      isFinal: t.days === 28,
+    });
+    // Thumbnail nhỏ cho admin
+    const small = document.createElement("canvas");
+    small.width = 200;
+    small.height = canvas.height * (200 / canvas.width);
+    small.style.maxWidth = "100%";
+    small.style.borderRadius = "6px";
+    small.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)";
+    const sctx = small.getContext("2d");
+    sctx.drawImage(canvas, 0, 0, small.width, small.height);
+    item.querySelector(".preview-canvas-wrap").appendChild(small);
+
+    item.querySelector("button").addEventListener("click", () => {
+      downloadCanvas(canvas, `mau-huy-hieu-${t.days}-ngay.png`);
+    });
+  }
 }
 
 // ---------- Admin: danh sách học viên đã đạt huy hiệu ----------
