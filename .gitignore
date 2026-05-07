@@ -13,3 +13,9 @@ cloudflare-worker-getresponse.js
 
 # Script deploy local – không cần đẩy lên GitHub
 deploy.bat
+
+# Cấu hình thật chứa mật khẩu DB – chỉ tồn tại trên hosting
+api/config.php
+
+# Folder ảnh học viên upload – không sync về local
+uploads/

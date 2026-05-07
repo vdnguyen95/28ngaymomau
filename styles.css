@@ -191,6 +191,24 @@ body {
 .lesson-view h2 { color: var(--green-800); font-size: 26px; margin-bottom: 8px; }
 .lesson-subtitle { color: var(--gray-600); font-size: 15px; }
 
+.video-wrapper {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%;
+  height: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow-md);
+  background: #000;
+}
+.video-wrapper iframe {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  border: 0;
+}
+
 .lesson-body h3 {
   color: var(--green-700);
   font-size: 18px;
@@ -1069,6 +1087,48 @@ body {
   color: var(--gray-800);
   margin-bottom: 6px;
 }
+
+/* Login tabs */
+.login-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--gray-100);
+  padding: 4px;
+  border-radius: 10px;
+  margin-bottom: 18px;
+}
+.login-tab {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--gray-600);
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.login-tab:hover { color: var(--gray-800); }
+.login-tab.active {
+  background: #fff;
+  color: var(--green-700);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.login-switch {
+  text-align: center;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--gray-600);
+}
+.login-switch a {
+  color: var(--green-700);
+  font-weight: 600;
+  text-decoration: none;
+}
+.login-switch a:hover { text-decoration: underline; }
 .login-hint {
   color: var(--gray-600);
   font-size: 14px;

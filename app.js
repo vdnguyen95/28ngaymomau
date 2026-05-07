@@ -6,12 +6,10 @@ const PROGRAM_NAME = "28 ngày giảm mỡ máu cùng dược sĩ Đạt";
 const ADMIN_ZALO = "0916839623";
 
 // =========================================================================
-// BACKEND: Google Apps Script Web App URL
-// Sau khi deploy backend-google-apps-script.gs, dán URL vào đây.
-// Để TRỐNG nếu chưa có backend (sẽ chỉ chạy ở chế độ localStorage cũ).
+// BACKEND: PHP API trên hosting iNet
+// Mặc định trỏ đến /api/index.php (cùng domain)
 // =========================================================================
-const BACKEND_URL = "";  // Ví dụ: "https://script.google.com/macros/s/AKfycb.../exec"
-const BACKEND_ADMIN_KEY = "duocsidat-admin-2026"; // PHẢI khớp ADMIN_KEY trong file .gs
+const BACKEND_URL = "/api/index.php";  // Chung domain – không cần CORS
 
 // =========================================================================
 // CẤU HÌNH GETRESPONSE
@@ -41,7 +39,10 @@ let currentUser = null;
 const el = {
   loginScreen: document.getElementById("loginScreen"),
   app: document.getElementById("app"),
-  loginForm: document.getElementById("loginForm"),
+  signinForm: document.getElementById("signinForm"),
+  signinPhone: document.getElementById("signinPhone"),
+  signinError: document.getElementById("signinError"),
+  signupForm: document.getElementById("signupForm"),
   loginName: document.getElementById("loginName"),
   loginPhone: document.getElementById("loginPhone"),
   loginEmail: document.getElementById("loginEmail"),
@@ -109,7 +110,9 @@ function formatDate(ts) {
 }
 
 // ---------- Auth ----------
-function login(name, phone, email) {
+// isNewSignup = true: đăng ký mới (sync email + show toast)
+// isNewSignup = false: đăng nhập lại tài khoản đã có (không sync lại)
+function login(name, phone, email, isNewSignup = false) {
   const users = loadUsers();
   let user = users[phone];
   const cleanEmail = (email || "").trim();
@@ -125,8 +128,9 @@ function login(name, phone, email) {
       history: [],
     };
     users[phone] = user;
+    isNewSignup = true; // chắc chắn là mới
   } else {
-    if (user.name !== name.trim()) user.name = name.trim();
+    if (name && name.trim() && user.name !== name.trim()) user.name = name.trim();
     if (cleanEmail && user.email !== cleanEmail) user.email = cleanEmail;
     if (!user.email && cleanEmail) user.email = cleanEmail;
     if (!user.submissions) user.submissions = {};
@@ -136,17 +140,15 @@ function login(name, phone, email) {
   localStorage.setItem(SESSION_KEY, phone);
   currentUser = user;
 
-  // Đồng bộ email vào GetResponse + toast thông báo quà tặng
-  if (cleanEmail) {
+  // Chỉ sync GetResponse + show toast khi ĐĂNG KÝ MỚI (không lặp lại mỗi lần đăng nhập)
+  if (isNewSignup && cleanEmail) {
     syncToGetResponse({ name: user.name, email: cleanEmail, phone, program: PROGRAM_NAME })
       .then((ok) => {
-        if (ok) {
-          showCopyToast("🎁 Quà tặng đã được gửi vào email " + cleanEmail);
-        }
+        if (ok) showCopyToast("🎁 Quà tặng đã được gửi vào email " + cleanEmail);
       });
   }
 
-  // Đồng bộ đăng ký vào backend (Google Sheets)
+  // Đồng bộ vào backend (luôn ghi để track activity)
   syncToBackend("register", { name: user.name, phone: user.phone, email: cleanEmail });
 
   showApp();
@@ -156,8 +158,11 @@ function logout() {
   currentUser = null;
   el.app.classList.add("hidden");
   el.loginScreen.classList.remove("hidden");
-  el.loginForm.reset();
-  el.loginError.classList.add("hidden");
+  if (el.signinForm) el.signinForm.reset();
+  if (el.signupForm) el.signupForm.reset();
+  if (el.signinError) el.signinError.classList.add("hidden");
+  if (el.loginError) el.loginError.classList.add("hidden");
+  pickDefaultTab();
 }
 function persistCurrent() {
   if (!currentUser) return true;
@@ -219,6 +224,9 @@ function showApp() {
   el.loginScreen.classList.add("hidden");
   el.app.classList.remove("hidden");
 
+  // Tải nội dung bài học mới nhất từ backend (text + video YouTube admin chỉnh)
+  fetchLessonOverrides().catch(() => {});
+
   el.userName.textContent = currentUser.name;
   el.userPhone.textContent = currentUser.phone;
   el.userAvatar.textContent = getInitials(currentUser.name);
@@ -279,7 +287,7 @@ function openLesson(day) {
   if (!isUnlocked(day)) return;
   currentUser.currentDay = day;
   persistCurrent();
-  const lesson = LESSONS[day - 1];
+  const lesson = resolveLesson(day);
 
   el.welcome.classList.add("hidden");
   el.quizView.classList.add("hidden");
@@ -287,12 +295,14 @@ function openLesson(day) {
   el.lessonView.classList.remove("hidden");
 
   const submitted = !!currentUser.submissions[day];
+  const videoHtml = youTubeEmbed(lesson.videoUrl);
   el.lessonView.innerHTML = `
     <div class="lesson-header">
-      <span class="lesson-day">Ngày ${lesson.day} / 28</span>
+      <span class="lesson-day">Ngày ${day} / 28</span>
       <h2>${lesson.title}</h2>
       <p class="lesson-subtitle">${lesson.subtitle}</p>
     </div>
+    ${videoHtml}
     <div class="lesson-body">${lesson.body}</div>
     <div class="lesson-actions">
       ${submitted ? `<span style="color: var(--green-700); font-weight:600; align-self:center; margin-right:auto;">✓ Đã nộp báo cáo</span>` : ""}
@@ -760,7 +770,52 @@ function podiumCard(u, kind, medal, rank) {
 }
 
 // ---------- Event binding ----------
-el.loginForm.addEventListener("submit", (e) => {
+
+// Tab switching
+function switchLoginTab(tab) {
+  document.querySelectorAll(".login-tab").forEach((t) => {
+    t.classList.toggle("active", t.dataset.tab === tab);
+  });
+  el.signinForm.classList.toggle("hidden", tab !== "signin");
+  el.signupForm.classList.toggle("hidden", tab !== "signup");
+  el.signinError.classList.add("hidden");
+  el.loginError.classList.add("hidden");
+}
+document.querySelectorAll(".login-tab").forEach((t) => {
+  t.addEventListener("click", () => switchLoginTab(t.dataset.tab));
+});
+const _goSignup = document.getElementById("goToSignup");
+if (_goSignup) _goSignup.addEventListener("click", (e) => { e.preventDefault(); switchLoginTab("signup"); });
+const _goSignin = document.getElementById("goToSignin");
+if (_goSignin) _goSignin.addEventListener("click", (e) => { e.preventDefault(); switchLoginTab("signin"); });
+
+// Mặc định: đã có tài khoản trên thiết bị → mở Đăng nhập; còn không → mở Đăng ký
+function pickDefaultTab() {
+  const users = loadUsers();
+  switchLoginTab(Object.keys(users).length > 0 ? "signin" : "signup");
+}
+
+// Form: Đăng nhập (chỉ SĐT)
+el.signinForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const phone = normalizePhone(el.signinPhone.value);
+  if (!isValidPhone(phone)) {
+    showSigninError("Số điện thoại không hợp lệ. Ví dụ: 0912345678");
+    return;
+  }
+  const users = loadUsers();
+  const user = users[phone];
+  if (!user) {
+    showSigninError("Chưa có tài khoản với số này. Hãy chuyển sang tab Đăng ký.");
+    return;
+  }
+  el.signinError.classList.add("hidden");
+  // Dùng dữ liệu đã lưu — không spam mail GetResponse
+  login(user.name, phone, user.email || "", false);
+});
+
+// Form: Đăng ký (đầy đủ thông tin)
+el.signupForm.addEventListener("submit", (e) => {
   e.preventDefault();
   const name = el.loginName.value.trim();
   const phone = normalizePhone(el.loginPhone.value);
@@ -777,9 +832,20 @@ el.loginForm.addEventListener("submit", (e) => {
     showLoginError("Email không hợp lệ. Bạn có thể bỏ trống nếu không muốn cung cấp.");
     return;
   }
+  const users = loadUsers();
+  if (users[phone]) {
+    showLoginError("Số điện thoại này đã có tài khoản. Hãy chuyển sang tab Đăng nhập.");
+    return;
+  }
   el.loginError.classList.add("hidden");
-  login(name, phone, email);
+  // Đăng ký mới: sync GR + show toast quà tặng
+  login(name, phone, email, true);
 });
+
+function showSigninError(msg) {
+  el.signinError.textContent = msg;
+  el.signinError.classList.remove("hidden");
+}
 
 
 // ---------- Đồng bộ GetResponse ----------
@@ -1090,20 +1156,53 @@ function trackPageView() {
   syncToBackend("view", {});
 }
 
-// ---------- Backend sync (Google Apps Script) ----------
+// ---------- Backend sync (PHP API trên hosting iNet) ----------
 async function syncToBackend(action, data) {
-  if (!BACKEND_URL) return; // chưa cấu hình backend → bỏ qua
+  if (!BACKEND_URL) return;
   try {
-    // text/plain để tránh CORS preflight với Apps Script
-    await fetch(BACKEND_URL, {
+    await fetch(`${BACKEND_URL}?action=${encodeURIComponent(action)}`, {
       method: "POST",
-      mode: "cors",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, ...data }),
     });
   } catch (e) {
-    console.warn("[backend sync]", action, e);
+    console.warn("[backend]", action, e);
   }
+}
+
+// Tải lesson override từ DB (text + video YouTube admin chỉnh sau này)
+let LESSON_OVERRIDES = {};
+async function fetchLessonOverrides() {
+  try {
+    const r = await fetch(`${BACKEND_URL}?action=lessons`);
+    const j = await r.json();
+    if (j && j.ok && Array.isArray(j.lessons)) {
+      j.lessons.forEach((l) => { LESSON_OVERRIDES[l.day] = l; });
+    }
+  } catch (e) {
+    console.warn("[fetchLessonOverrides]", e);
+  }
+}
+
+// Trả về object lesson đã merge override
+function resolveLesson(day) {
+  const base = LESSONS[day - 1];
+  const ov = LESSON_OVERRIDES[day];
+  if (!ov) return base;
+  return {
+    ...base,
+    title:    (ov.title    && ov.title.trim())    ? ov.title    : base.title,
+    subtitle: (ov.subtitle && ov.subtitle.trim()) ? ov.subtitle : base.subtitle,
+    body:     (ov.body     && ov.body.trim())     ? ov.body     : base.body,
+    videoUrl: ov.video_url || "",
+  };
+}
+
+function youTubeEmbed(url) {
+  if (!url) return "";
+  const m = String(url).match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([^&?\/\s]+)/);
+  if (!m) return "";
+  return `<div class="video-wrapper"><iframe src="https://www.youtube.com/embed/${m[1]}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`;
 }
 
 function loadContacts() {
@@ -1137,6 +1236,39 @@ if (zaloFab) {
   zaloFab.addEventListener("click", () => trackZaloContact("consult"));
 }
 
+// ---------- ADMIN PASSWORD ----------
+const ADMIN_SESSION_KEY = "mm_admin_pwd_v1";
+
+function getAdminPassword() {
+  return sessionStorage.getItem(ADMIN_SESSION_KEY) || "";
+}
+function setAdminPassword(pwd) {
+  sessionStorage.setItem(ADMIN_SESSION_KEY, pwd);
+}
+function clearAdminPassword() {
+  sessionStorage.removeItem(ADMIN_SESSION_KEY);
+}
+
+async function promptAdminPassword() {
+  const pwd = prompt("Nhập mật khẩu quản trị:");
+  if (!pwd) return null;
+  // Verify ngay bằng cách gọi API admin
+  try {
+    const r = await fetch(`${BACKEND_URL}?action=admin&password=${encodeURIComponent(pwd)}`);
+    const j = await r.json();
+    if (j.ok) {
+      setAdminPassword(pwd);
+      return pwd;
+    } else {
+      alert(j.error || "Sai mật khẩu");
+      return null;
+    }
+  } catch (e) {
+    alert("Không kết nối được tới backend. Hãy đảm bảo /api/index.php đã được deploy.");
+    return null;
+  }
+}
+
 // ---------- ADMIN DASHBOARD ----------
 
 async function renderAdmin() {
@@ -1146,43 +1278,57 @@ async function renderAdmin() {
   adminEl.classList.remove("hidden");
   if (zaloFab) zaloFab.style.display = "none";
 
-  // Cố gắng đọc dữ liệu từ backend trước; nếu không có thì rơi về localStorage
-  let allUsers, views, contacts, fromBackend = false;
-  if (BACKEND_URL) {
-    try {
-      document.getElementById("adminStats").innerHTML = `<div class="admin-stat"><div class="label">Đang tải dữ liệu từ backend...</div></div>`;
-      const r = await fetch(`${BACKEND_URL}?key=${encodeURIComponent(BACKEND_ADMIN_KEY)}`);
-      const j = await r.json();
-      if (j.ok) {
-        fromBackend = true;
-        allUsers = (j.users || []).map((u) => ({
-          name: u.Name,
-          phone: u.Phone,
-          email: u.Email,
-          createdAt: u.CreatedAt ? new Date(u.CreatedAt).getTime() : 0,
-          lastSeen: u.LastSeen ? new Date(u.LastSeen).getTime() : 0,
-          currentDay: u.CurrentDay || 1,
-          completed: Array.from({ length: u.CompletedCount || 0 }, (_, i) => i + 1),
-          submissions: {},
-          history: [{ at: u.LastSeen ? new Date(u.LastSeen).getTime() : 0 }],
-        }));
-        views = j.views || 0;
-        contacts = (j.events || [])
-          .filter((e) => e.Type === "zalo_contact")
-          .map((e) => ({
-            at: e.Time ? new Date(e.Time).getTime() : 0,
-            source: e.Detail,
-            name: e.Name,
-            phone: e.Phone,
-          }));
-      } else {
-        throw new Error(j.error || "Không lấy được dữ liệu");
-      }
-    } catch (e) {
-      console.warn("[admin] Fallback localStorage:", e);
+  // Yêu cầu mật khẩu nếu chưa có
+  let pwd = getAdminPassword();
+  if (!pwd) {
+    pwd = await promptAdminPassword();
+    if (!pwd) {
+      window.location.href = "?";
+      return;
     }
   }
-  if (!fromBackend) {
+
+  // Đọc dữ liệu từ backend
+  let allUsers = [], views = 0, contacts = [], submissionsRaw = [], fromBackend = false;
+  document.getElementById("adminStats").innerHTML = `<div class="admin-stat"><div class="label">Đang tải dữ liệu...</div></div>`;
+  try {
+    const r = await fetch(`${BACKEND_URL}?action=admin&password=${encodeURIComponent(pwd)}`);
+    const j = await r.json();
+    if (j.ok) {
+      fromBackend = true;
+      allUsers = (j.users || []).map((u) => ({
+        name: u.name,
+        phone: u.phone,
+        email: u.email,
+        createdAt: u.created_at ? new Date(u.created_at + "Z").getTime() : 0,
+        lastSeen:  u.last_seen  ? new Date(u.last_seen + "Z").getTime()  : 0,
+        currentDay: parseInt(u.current_day || 1, 10),
+        completed: u.completed_days_arr || [],
+        submissions: {},
+        history: [{ at: u.last_seen ? new Date(u.last_seen + "Z").getTime() : 0 }],
+      }));
+      views = parseInt(j.views || 0, 10);
+      contacts = (j.events || [])
+        .filter((e) => e.type === "zalo_contact")
+        .map((e) => ({
+          at: e.created_at ? new Date(e.created_at + "Z").getTime() : 0,
+          source: e.detail,
+          name: e.name,
+          phone: e.phone,
+        }));
+      submissionsRaw = j.submissions || [];
+    } else if (j.error && j.error.includes("mật khẩu")) {
+      clearAdminPassword();
+      adminEl.classList.add("hidden");
+      pwd = await promptAdminPassword();
+      if (pwd) return renderAdmin();
+      window.location.href = "?";
+      return;
+    } else {
+      throw new Error(j.error);
+    }
+  } catch (e) {
+    console.warn("[admin] Fallback localStorage:", e);
     const users = loadUsers();
     allUsers = Object.values(users);
     views = parseInt(localStorage.getItem(VIEWS_KEY) || "0", 10);
@@ -1302,11 +1448,151 @@ async function renderAdmin() {
   ` : `<div class="admin-empty">Chưa có lượt liên hệ Zalo nào được ghi nhận.</div>`;
   document.getElementById("adminContacts").innerHTML = contactsHtml;
 
+  // Render khu vực quản lý bài học
+  await renderLessonManager(pwd);
+
   // Nút làm mới
   document.getElementById("refreshAdminBtn").onclick = renderAdmin;
 
   // Xuất CSV
   document.getElementById("exportCsvBtn").onclick = () => exportCsv(allUsers, contacts);
+}
+
+// ---------- LESSON MANAGER (Admin) ----------
+async function renderLessonManager(pwd) {
+  // Tạo card nếu chưa có
+  let card = document.getElementById("lessonManagerCard");
+  if (!card) {
+    card = document.createElement("div");
+    card.className = "admin-card";
+    card.id = "lessonManagerCard";
+    document.querySelector("#adminScreen main.container").insertBefore(
+      card, document.querySelector("#adminScreen .admin-note")
+    );
+  }
+  // Tải overrides mới nhất
+  await fetchLessonOverrides();
+  const rows = LESSONS.map((base) => {
+    const ov = LESSON_OVERRIDES[base.day];
+    const hasCustom = !!ov;
+    const hasVideo  = ov && ov.video_url;
+    return `
+      <tr>
+        <td>Ngày ${base.day}</td>
+        <td><strong>${(ov && ov.title) || base.title}</strong></td>
+        <td>${hasCustom ? '<span class="badge contact">Đã tùy chỉnh</span>' : '<span style="color:var(--gray-400)">Mặc định</span>'}</td>
+        <td>${hasVideo ? '🎬' : '—'}</td>
+        <td>
+          <button class="btn btn-secondary btn-sm" data-edit-lesson="${base.day}">Sửa</button>
+          ${hasCustom ? `<button class="btn btn-secondary btn-sm" data-reset-lesson="${base.day}" style="margin-left:6px; color: var(--danger);">Khôi phục</button>` : ''}
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  card.innerHTML = `
+    <h2>📚 Quản lý nội dung 28 bài học</h2>
+    <p style="color: var(--gray-600); font-size: 13px; margin-bottom: 12px;">
+      Sửa nội dung bài học và nhúng video YouTube. Học viên sẽ thấy nội dung mới ở lần truy cập tiếp theo.
+    </p>
+    <div class="admin-table-wrapper">
+    <table class="admin-table">
+      <thead><tr><th>Ngày</th><th>Tiêu đề</th><th>Trạng thái</th><th>Video</th><th>Hành động</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </div>
+  `;
+  card.querySelectorAll("[data-edit-lesson]").forEach((b) => {
+    b.addEventListener("click", () => openLessonEditor(parseInt(b.dataset.editLesson, 10), pwd));
+  });
+  card.querySelectorAll("[data-reset-lesson]").forEach((b) => {
+    b.addEventListener("click", async () => {
+      if (!confirm("Khôi phục bài này về nội dung mặc định?")) return;
+      const r = await fetch(`${BACKEND_URL}?action=lesson_delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwd, day: parseInt(b.dataset.resetLesson, 10) }),
+      });
+      const j = await r.json();
+      if (j.ok) {
+        delete LESSON_OVERRIDES[parseInt(b.dataset.resetLesson, 10)];
+        renderLessonManager(pwd);
+      } else alert(j.error || "Lỗi");
+    });
+  });
+}
+
+function openLessonEditor(day, pwd) {
+  const base = LESSONS[day - 1];
+  const ov = LESSON_OVERRIDES[day] || {};
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-card" style="max-width: 800px;">
+      <h2>Sửa bài ngày ${day}</h2>
+      <p class="modal-desc">Để trống một trường để dùng nội dung mặc định. Body hỗ trợ HTML (nếu copy từ Word, dán dưới dạng văn bản).</p>
+      <form id="lessonEditorForm">
+        <div style="margin-bottom: 12px;">
+          <label style="font-weight:600; font-size:14px; display:block; margin-bottom:4px;">Tiêu đề</label>
+          <input type="text" id="le_title" style="width:100%; padding:10px; border:1.5px solid var(--gray-200); border-radius:8px;" value="${(ov.title || base.title || '').replace(/"/g, '&quot;')}" />
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="font-weight:600; font-size:14px; display:block; margin-bottom:4px;">Phụ đề</label>
+          <input type="text" id="le_subtitle" style="width:100%; padding:10px; border:1.5px solid var(--gray-200); border-radius:8px;" value="${(ov.subtitle || base.subtitle || '').replace(/"/g, '&quot;')}" />
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="font-weight:600; font-size:14px; display:block; margin-bottom:4px;">URL video YouTube (tùy chọn)</label>
+          <input type="url" id="le_video" placeholder="https://www.youtube.com/watch?v=..." style="width:100%; padding:10px; border:1.5px solid var(--gray-200); border-radius:8px;" value="${ov.video_url || ''}" />
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="font-weight:600; font-size:14px; display:block; margin-bottom:4px;">Nội dung bài học (HTML)</label>
+          <textarea id="le_body" rows="14" style="width:100%; padding:12px; border:1.5px solid var(--gray-200); border-radius:8px; font-family: ui-monospace, monospace; font-size: 13px;">${(ov.body || base.body || '').trim()}</textarea>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" id="le_cancel">Hủy</button>
+          <button type="submit" class="btn btn-primary">💾 Lưu</button>
+        </div>
+      </form>
+      <button type="button" class="modal-close" id="le_close">×</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  document.getElementById("le_cancel").onclick = close;
+  document.getElementById("le_close").onclick = close;
+
+  document.getElementById("lessonEditorForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const payload = {
+      password: pwd,
+      day,
+      title:    document.getElementById("le_title").value,
+      subtitle: document.getElementById("le_subtitle").value,
+      body:     document.getElementById("le_body").value,
+      videoUrl: document.getElementById("le_video").value,
+    };
+    const r = await fetch(`${BACKEND_URL}?action=lesson_update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const j = await r.json();
+    if (j.ok) {
+      LESSON_OVERRIDES[day] = {
+        day,
+        title: payload.title,
+        subtitle: payload.subtitle,
+        body: payload.body,
+        video_url: payload.videoUrl,
+      };
+      close();
+      renderLessonManager(pwd);
+      alert("Đã lưu bài " + day);
+    } else {
+      alert(j.error || "Lỗi lưu");
+    }
+  });
 }
 
 function exportCsv(users, contacts) {
@@ -1365,4 +1651,5 @@ if (ADMIN_MODE) {
 } else {
   el.loginScreen.classList.remove("hidden");
   el.app.classList.add("hidden");
+  pickDefaultTab();
 }

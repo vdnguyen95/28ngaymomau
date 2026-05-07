@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>28 ngày giảm mỡ máu cùng dược sĩ Đạt</title>
+  <title>28 ngày xây dựng lối sống cải thiện mỡ máu cùng dược sĩ Đạt</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -15,16 +15,33 @@
         <h1>28 ngày giảm mỡ máu</h1>
         <p>cùng dược sĩ Đạt</p>
       </div>
-      <h2>Đăng nhập để bắt đầu học</h2>
-      <p class="login-hint">Nhập họ tên và số điện thoại của bạn. Tiến độ học tập sẽ được lưu riêng theo số điện thoại.</p>
-      <form id="loginForm" class="login-form">
+      <div class="login-tabs">
+        <button type="button" class="login-tab active" data-tab="signin">Đăng nhập</button>
+        <button type="button" class="login-tab" data-tab="signup">Đăng ký</button>
+      </div>
+
+      <!-- FORM ĐĂNG NHẬP -->
+      <form id="signinForm" class="login-form">
+        <p class="login-hint">Đã có tài khoản? Nhập số điện thoại để tiếp tục học.</p>
+        <label>
+          <span>Số điện thoại</span>
+          <input type="tel" id="signinPhone" placeholder="0xxxxxxxxx" required pattern="^(0|\+84)[0-9]{9,10}$" autocomplete="tel" />
+        </label>
+        <div id="signinError" class="login-error hidden"></div>
+        <button type="submit" class="btn btn-primary btn-lg">Đăng nhập</button>
+        <p class="login-switch">Chưa có tài khoản? <a href="#" id="goToSignup">Đăng ký ngay</a></p>
+      </form>
+
+      <!-- FORM ĐĂNG KÝ -->
+      <form id="signupForm" class="login-form hidden">
+        <p class="login-hint">Đăng ký để bắt đầu chương trình 28 ngày — tiến độ sẽ được lưu theo số điện thoại của bạn.</p>
         <label>
           <span>Họ và tên</span>
-          <input type="text" id="loginName" placeholder="Nguyễn Văn A" required minlength="2" maxlength="60" />
+          <input type="text" id="loginName" placeholder="Nguyễn Văn A" minlength="2" maxlength="60" />
         </label>
         <label>
           <span>Số điện thoại</span>
-          <input type="tel" id="loginPhone" placeholder="0xxxxxxxxx" required pattern="^(0|\+84)[0-9]{9,10}$" />
+          <input type="tel" id="loginPhone" placeholder="0xxxxxxxxx" pattern="^(0|\+84)[0-9]{9,10}$" autocomplete="tel" />
         </label>
         <div class="email-gift-box">
           <div class="email-gift-title">🎁 Tặng ngay khi để lại email:</div>
@@ -39,10 +56,12 @@
           <input type="email" id="loginEmail" placeholder="ban@email.com" autocomplete="email" />
         </label>
         <div id="loginError" class="login-error hidden"></div>
-        <button type="submit" class="btn btn-primary btn-lg">Xác nhận đăng ký</button>
+        <button type="submit" class="btn btn-primary btn-lg">Tạo tài khoản</button>
+        <p class="login-switch">Đã có tài khoản? <a href="#" id="goToSignin">Đăng nhập</a></p>
       </form>
+
       <div class="login-foot">
-        <small>Tiến độ học tập sẽ được lưu lại theo số điện thoại của bạn.</small>
+        <small>Mỗi tài khoản được nhận diện theo số điện thoại — bạn không phải nhập email lại các lần sau.</small>
       </div>
     </div>
   </div>
