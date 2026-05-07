@@ -1347,7 +1347,7 @@ async function renderAdmin() {
     { label: "Lần liên hệ Zalo", value: contacts.length, kind: "contacts" },
   ];
   document.getElementById("adminStats").innerHTML =
-    `<div class="admin-source-tag">${fromBackend ? "🟢 Đang đọc từ Google Sheets backend" : "🟡 Đang đọc từ localStorage (chưa kết nối backend)"}</div>` +
+    `<div class="admin-source-tag">${fromBackend ? "🟢 Đang đọc dữ liệu từ MySQL trên hosting" : "🟡 Đang đọc từ localStorage (backend chưa kết nối)"}</div>` +
     stats.map((s) => `
       <div class="admin-stat ${s.kind}">
         <div class="label">${s.label}</div>
