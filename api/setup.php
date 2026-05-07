@@ -55,7 +55,27 @@ $statements = [
     video_url VARCHAR(500),
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+
+  "CREATE TABLE IF NOT EXISTS program_settings (
+    key_name VARCHAR(50) PRIMARY KEY,
+    value LONGTEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
 ];
+
+// Idempotent ALTER TABLE: thêm cột avatar nếu chưa có
+try { $db->exec("ALTER TABLE users ADD COLUMN avatar VARCHAR(500)"); $results[] = "✓ Thêm cột avatar vào users"; }
+catch (Exception $e) { $results[] = "⊙ Cột avatar đã tồn tại (OK)"; }
+
+// Khởi tạo nội dung quà tặng mặc định nếu chưa có
+try {
+  $stmt = $db->prepare("INSERT IGNORE INTO program_settings (key_name, value) VALUES (?, ?)");
+  $stmt->execute(['gift_title', 'Quà tặng đặc biệt cho học viên hoàn thành 28 ngày']);
+  $stmt->execute(['gift_description', 'Chúc mừng bạn đã hoàn thành chương trình! Hãy nhắn Zalo dược sĩ Đạt 0916839623 để nhận quà tặng đặc biệt.']);
+  $stmt->execute(['gift_link', '']);
+  $stmt->execute(['gift_image', '']);
+  $results[] = "✓ Khởi tạo nội dung quà tặng";
+} catch (Exception $e) { $results[] = "⊙ Quà tặng đã có (OK)"; }
 
 $results = [];
 foreach ($statements as $s) {

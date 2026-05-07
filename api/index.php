@@ -21,6 +21,10 @@ try {
     case 'lessons':        handleLessons();       break;
     case 'lesson_update':  handleLessonUpdate();  break;
     case 'lesson_delete':  handleLessonDelete();  break;
+    case 'upload_avatar':  handleUploadAvatar();  break;
+    case 'get_avatar':     handleGetAvatar();     break;
+    case 'settings_get':   handleSettingsGet();   break;
+    case 'settings_update':handleSettingsUpdate();break;
     default: jsonResponse(['ok' => false, 'error' => 'Unknown action: ' . $action], 400);
   }
 } catch (Exception $e) {
@@ -170,5 +174,57 @@ function handleLessonDelete() {
   $day = intval($d['day'] ?? 0);
   if ($day < 1 || $day > 28) jsonResponse(['ok' => false, 'error' => 'Day must be 1-28'], 400);
   getDb()->prepare("DELETE FROM lesson_content WHERE day = ?")->execute([$day]);
+  jsonResponse(['ok' => true]);
+}
+
+function handleUploadAvatar() {
+  $d = getPostData();
+  if (empty($d['phone']) || empty($d['image'])) jsonResponse(['ok' => false, 'error' => 'Missing fields'], 400);
+  if (!preg_match('/^data:([^;]+);base64,(.+)$/', $d['image'], $m)) {
+    jsonResponse(['ok' => false, 'error' => 'Sai định dạng ảnh'], 400);
+  }
+  $mime = $m[1];
+  $data = base64_decode($m[2]);
+  if ($data === false) jsonResponse(['ok' => false, 'error' => 'Base64 decode lỗi'], 400);
+
+  $ext = ($mime === 'image/png') ? 'png' : 'jpg';
+  $uploadDir = __DIR__ . '/../uploads/';
+  if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+  $filename = 'avatar-' . preg_replace('/[^0-9]/', '', $d['phone']) . '-' . time() . '.' . $ext;
+  if (file_put_contents($uploadDir . $filename, $data) === false) {
+    jsonResponse(['ok' => false, 'error' => 'Không lưu được file'], 500);
+  }
+  $url = 'uploads/' . $filename;
+  getDb()->prepare("UPDATE users SET avatar = ? WHERE phone = ?")->execute([$url, $d['phone']]);
+  jsonResponse(['ok' => true, 'url' => $url]);
+}
+
+function handleGetAvatar() {
+  $phone = $_GET['phone'] ?? '';
+  if (!$phone) jsonResponse(['ok' => false, 'error' => 'Missing phone'], 400);
+  $stmt = getDb()->prepare("SELECT avatar FROM users WHERE phone = ?");
+  $stmt->execute([$phone]);
+  $row = $stmt->fetch();
+  jsonResponse(['ok' => true, 'url' => $row ? ($row['avatar'] ?? '') : '']);
+}
+
+function handleSettingsGet() {
+  $rows = getDb()->query("SELECT key_name, value FROM program_settings")->fetchAll();
+  $settings = [];
+  foreach ($rows as $r) $settings[$r['key_name']] = $r['value'];
+  jsonResponse(['ok' => true, 'settings' => $settings]);
+}
+
+function handleSettingsUpdate() {
+  $d = getPostData();
+  if (!checkAdmin($d['password'] ?? '')) jsonResponse(['ok' => false, 'error' => 'Sai mật khẩu'], 401);
+  $allowed = ['gift_title', 'gift_description', 'gift_link', 'gift_image'];
+  $stmt = getDb()->prepare(
+    "INSERT INTO program_settings (key_name, value) VALUES (?, ?)
+     ON DUPLICATE KEY UPDATE value = VALUES(value)"
+  );
+  foreach ($allowed as $k) {
+    if (isset($d[$k])) $stmt->execute([$k, $d[$k]]);
+  }
   jsonResponse(['ok' => true]);
 }

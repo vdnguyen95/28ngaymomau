@@ -458,6 +458,11 @@ function submitImages(day) {
     exerciseImage: submission.exercise,
   });
 
+  // Vinh danh: hoàn thành ngày 7, 14, 21, 28 → bật modal huy hiệu
+  if (MILESTONES.includes(day)) {
+    setTimeout(() => showBadgeCelebration(day), 800);
+  }
+
   renderSidebar();
 
   const resultHtml = `
@@ -1451,6 +1456,12 @@ async function renderAdmin() {
   // Render khu vực quản lý bài học
   await renderLessonManager(pwd);
 
+  // Render khu vực quà tặng cuối chương trình
+  await renderGiftManager(pwd);
+
+  // Khu xem học viên đã đạt huy hiệu
+  renderBadgeAchievers(allUsers);
+
   // Nút làm mới
   document.getElementById("refreshAdminBtn").onclick = renderAdmin;
 
@@ -1595,6 +1606,103 @@ function openLessonEditor(day, pwd) {
   });
 }
 
+// ---------- Admin: quản lý quà tặng cuối chương trình ----------
+async function renderGiftManager(pwd) {
+  let card = document.getElementById("giftManagerCard");
+  if (!card) {
+    card = document.createElement("div");
+    card.className = "admin-card";
+    card.id = "giftManagerCard";
+    document.querySelector("#adminScreen main.container").insertBefore(
+      card, document.querySelector("#adminScreen .admin-note")
+    );
+  }
+  let settings = {};
+  try {
+    const r = await fetch(`${BACKEND_URL}?action=settings_get`);
+    const j = await r.json();
+    if (j.ok) settings = j.settings || {};
+  } catch (e) {}
+
+  card.innerHTML = `
+    <h2>🎁 Quà tặng đặc biệt (hiển thị khi học viên hoàn thành 28 ngày)</h2>
+    <p style="color: var(--gray-600); font-size: 13px; margin-bottom: 12px;">
+      Nội dung này sẽ hiện trong modal vinh danh khi học viên hoàn thành ngày 28.
+    </p>
+    <form id="giftForm">
+      <div style="margin-bottom: 12px;">
+        <label style="font-weight:600; font-size:14px; display:block; margin-bottom:4px;">Tiêu đề quà tặng</label>
+        <input type="text" id="g_title" style="width:100%; padding:10px; border:1.5px solid var(--gray-200); border-radius:8px;" value="${(settings.gift_title || '').replace(/"/g, '&quot;')}" />
+      </div>
+      <div style="margin-bottom: 12px;">
+        <label style="font-weight:600; font-size:14px; display:block; margin-bottom:4px;">Mô tả</label>
+        <textarea id="g_desc" rows="3" style="width:100%; padding:10px; border:1.5px solid var(--gray-200); border-radius:8px;">${settings.gift_description || ''}</textarea>
+      </div>
+      <div style="margin-bottom: 12px;">
+        <label style="font-weight:600; font-size:14px; display:block; margin-bottom:4px;">Link nhận quà (tùy chọn)</label>
+        <input type="url" id="g_link" placeholder="https://..." style="width:100%; padding:10px; border:1.5px solid var(--gray-200); border-radius:8px;" value="${settings.gift_link || ''}" />
+      </div>
+      <div style="margin-bottom: 12px;">
+        <label style="font-weight:600; font-size:14px; display:block; margin-bottom:4px;">URL ảnh quà tặng (tùy chọn)</label>
+        <input type="url" id="g_image" placeholder="https://... hoặc uploads/..." style="width:100%; padding:10px; border:1.5px solid var(--gray-200); border-radius:8px;" value="${settings.gift_image || ''}" />
+      </div>
+      <button type="submit" class="btn btn-primary">💾 Lưu</button>
+    </form>
+  `;
+  document.getElementById("giftForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const payload = {
+      password: pwd,
+      gift_title: document.getElementById("g_title").value,
+      gift_description: document.getElementById("g_desc").value,
+      gift_link: document.getElementById("g_link").value,
+      gift_image: document.getElementById("g_image").value,
+    };
+    const r = await fetch(`${BACKEND_URL}?action=settings_update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const j = await r.json();
+    alert(j.ok ? "Đã lưu quà tặng" : (j.error || "Lỗi"));
+  });
+}
+
+// ---------- Admin: danh sách học viên đã đạt huy hiệu ----------
+function renderBadgeAchievers(allUsers) {
+  let card = document.getElementById("achieversCard");
+  if (!card) {
+    card = document.createElement("div");
+    card.className = "admin-card";
+    card.id = "achieversCard";
+    document.querySelector("#adminScreen main.container").insertBefore(
+      card, document.querySelector("#adminScreen .admin-note")
+    );
+  }
+  const tiers = [
+    { days: 28, label: "🏆 Bằng vinh danh 28 ngày", color: "#d97706" },
+    { days: 21, label: "🥇 Huy hiệu tuần 3 (21 ngày)", color: "#15803d" },
+    { days: 14, label: "🥈 Huy hiệu tuần 2 (14 ngày)", color: "#22c55e" },
+    { days: 7,  label: "🥉 Huy hiệu tuần 1 (7 ngày)",  color: "#86efac" },
+  ];
+  const html = tiers.map((t) => {
+    const winners = allUsers.filter((u) => (u.completed || []).length >= t.days);
+    if (!winners.length) return "";
+    return `
+      <div style="margin-bottom: 16px;">
+        <h3 style="color: ${t.color}; font-size: 15px; margin-bottom: 8px;">${t.label} <span style="color:var(--gray-600); font-weight:400;">(${winners.length} học viên)</span></h3>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+          ${winners.map((u) => `<span style="background: var(--green-50); color: var(--green-800); padding: 4px 10px; border-radius: 12px; font-size: 13px;">${u.name} · ${u.phone}</span>`).join("")}
+        </div>
+      </div>
+    `;
+  }).join("");
+  card.innerHTML = `
+    <h2>🎖 Học viên đã đạt huy hiệu</h2>
+    ${html || '<div class="admin-empty">Chưa có ai đạt mốc nào.</div>'}
+  `;
+}
+
 function exportCsv(users, contacts) {
   const csvLines = [];
   csvLines.push("STT,Họ tên,Số điện thoại,Email,Ngày đăng ký,Số bài hoàn thành,Ngày hiện tại,Lần liên hệ Zalo");
@@ -1625,6 +1733,293 @@ function exportCsv(users, contacts) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ---------- Vinh danh huy hiệu ----------
+const MILESTONES = [7, 14, 21, 28];
+
+// Tải ảnh thành Image object để dùng cho canvas
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(' ');
+  let line = '';
+  const lines = [];
+  for (const w of words) {
+    const test = line + w + ' ';
+    if (ctx.measureText(test).width > maxWidth && line.length) {
+      lines.push(line.trim());
+      line = w + ' ';
+    } else line = test;
+  }
+  lines.push(line.trim());
+  lines.forEach((l, i) => ctx.fillText(l, x, y + i * lineHeight));
+  return lines.length * lineHeight;
+}
+
+async function generateBadgeCanvas({ name, daysCompleted, avatarUrl, isFinal }) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const W = isFinal ? 1200 : 800;
+  const H = isFinal ? 850 : 800;
+  canvas.width = W;
+  canvas.height = H;
+
+  if (isFinal) {
+    // Bằng vinh danh: nền vàng cream
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, '#fffbeb');
+    g.addColorStop(1, '#fef3c7');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    // Viền vàng
+    ctx.strokeStyle = '#d97706';
+    ctx.lineWidth = 12;
+    ctx.strokeRect(20, 20, W - 40, H - 40);
+    ctx.lineWidth = 3;
+    ctx.strokeRect(40, 40, W - 80, H - 80);
+  } else {
+    // Huy hiệu tuần: nền xanh gradient
+    const g = ctx.createRadialGradient(W/2, H/2, 100, W/2, H/2, W);
+    g.addColorStop(0, '#22c55e');
+    g.addColorStop(1, '#15803d');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    // Viền trắng
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(30, 30, W - 60, H - 60);
+  }
+
+  // Tiêu đề trên cùng
+  ctx.textAlign = 'center';
+  ctx.fillStyle = isFinal ? '#92400e' : '#fff';
+  ctx.font = `bold ${isFinal ? 56 : 38}px 'Segoe UI', Arial, sans-serif`;
+  ctx.fillText(isFinal ? 'BẰNG VINH DANH' : `🏆 HUY HIỆU TUẦN ${Math.ceil(daysCompleted/7)}`, W/2, isFinal ? 130 : 100);
+
+  if (isFinal) {
+    ctx.font = `28px 'Segoe UI', Arial, sans-serif`;
+    ctx.fillStyle = '#78350f';
+    ctx.fillText('Chứng nhận hoàn thành chương trình', W/2, 180);
+  }
+
+  // Vẽ ảnh đại diện hình tròn
+  const photoY = isFinal ? 290 : 200;
+  const photoR = isFinal ? 110 : 130;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(W/2, photoY + photoR, photoR, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+
+  let avatarLoaded = false;
+  if (avatarUrl) {
+    try {
+      const img = await loadImage(avatarUrl);
+      const size = photoR * 2;
+      const ratio = Math.max(size / img.width, size / img.height);
+      const w = img.width * ratio;
+      const h = img.height * ratio;
+      ctx.drawImage(img, W/2 - w/2, photoY + photoR - h/2, w, h);
+      avatarLoaded = true;
+    } catch (e) { console.warn('Avatar load fail', e); }
+  }
+  if (!avatarLoaded) {
+    // Fallback: chữ cái đầu trên nền xanh
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(W/2 - photoR, photoY, photoR * 2, photoR * 2);
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${photoR}px 'Segoe UI', Arial, sans-serif`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(getInitial(name) || '?', W/2, photoY + photoR + 5);
+    ctx.textBaseline = 'alphabetic';
+  }
+  ctx.restore();
+  // Viền tròn quanh ảnh
+  ctx.strokeStyle = isFinal ? '#d97706' : '#fff';
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.arc(W/2, photoY + photoR, photoR, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Tên học viên
+  ctx.fillStyle = isFinal ? '#92400e' : '#fff';
+  ctx.font = `bold ${isFinal ? 52 : 44}px 'Segoe UI', Arial, sans-serif`;
+  ctx.textAlign = 'center';
+  const nameY = photoY + photoR * 2 + (isFinal ? 70 : 60);
+  ctx.fillText(name, W/2, nameY);
+
+  // Subtitle: đã hoàn thành ...
+  ctx.font = `${isFinal ? 30 : 28}px 'Segoe UI', Arial, sans-serif`;
+  ctx.fillStyle = isFinal ? '#78350f' : '#fef9c3';
+  const subY = nameY + (isFinal ? 60 : 50);
+  ctx.fillText('Đã hoàn thành ' + daysCompleted + '/28 ngày', W/2, subY);
+  ctx.fillText('thay đổi mỡ máu cùng Dược sĩ Đạt', W/2, subY + (isFinal ? 42 : 38));
+
+  // Logo dưới cùng
+  ctx.font = `${isFinal ? 24 : 22}px 'Segoe UI', Arial, sans-serif`;
+  ctx.fillStyle = isFinal ? '#a16207' : 'rgba(255,255,255,0.8)';
+  ctx.fillText('🌿 28ngaymomau.duocsidat.vn', W/2, H - (isFinal ? 80 : 60));
+
+  return canvas;
+}
+
+function downloadCanvas(canvas, filename) {
+  const link = document.createElement('a');
+  link.download = filename;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+async function shareCanvas(canvas, name) {
+  // Dùng Web Share API nếu hỗ trợ (mobile), fallback: copy ảnh + mở Facebook
+  canvas.toBlob(async (blob) => {
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'huyhieu.png', { type: 'image/png' })] })) {
+      try {
+        await navigator.share({
+          title: '28 ngày giảm mỡ máu cùng Dược sĩ Đạt',
+          text: `${name} đã hoàn thành chặng đường giảm mỡ máu! 🌿`,
+          files: [new File([blob], 'huyhieu.png', { type: 'image/png' })],
+        });
+        return;
+      } catch (e) {}
+    }
+    // Fallback: copy vào clipboard rồi mở Facebook share
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      showCopyToast('🖼 Đã copy huy hiệu — paste vào bài đăng Facebook/Zalo');
+    } catch (e) {
+      showCopyToast('Trình duyệt không hỗ trợ share. Hãy bấm "Tải về" rồi đăng thủ công.');
+    }
+  }, 'image/png');
+}
+
+async function uploadAvatar(file) {
+  const dataUrl = await resizeImage(file, 600, 0.85);
+  const r = await fetch(`${BACKEND_URL}?action=upload_avatar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone: currentUser.phone, image: dataUrl }),
+  });
+  const j = await r.json();
+  if (j.ok) {
+    currentUser.avatar = j.url;
+    return dataUrl; // dùng dataURL ngay (canvas-friendly, không CORS)
+  }
+  throw new Error(j.error || 'Upload thất bại');
+}
+
+async function getAvatarUrl() {
+  // Ưu tiên cache cục bộ
+  if (currentUser.avatarDataUrl) return currentUser.avatarDataUrl;
+  if (!currentUser.avatar) {
+    try {
+      const r = await fetch(`${BACKEND_URL}?action=get_avatar&phone=${encodeURIComponent(currentUser.phone)}`);
+      const j = await r.json();
+      if (j.ok && j.url) currentUser.avatar = j.url;
+    } catch (e) {}
+  }
+  return currentUser.avatar || '';
+}
+
+async function showBadgeCelebration(daysCompleted) {
+  const isFinal = daysCompleted >= 28;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-card badge-modal-card">
+      <h2>${isFinal ? '🏆 Chúc mừng! Bạn đã hoàn thành 28 ngày!' : `🎉 Chúc mừng hoàn thành tuần ${Math.ceil(daysCompleted/7)}!`}</h2>
+      <p class="modal-desc">${isFinal ? 'Đây là bằng vinh danh dành cho bạn — tải về và chia sẻ thành tích nhé!' : 'Đây là huy hiệu dành cho bạn — tải về hoặc chia sẻ lên mạng xã hội.'}</p>
+      <div id="avatarUploaderArea"></div>
+      <div class="badge-canvas-wrap" id="badgeWrap"><div style="padding: 40px; color: var(--gray-400);">Đang tạo huy hiệu...</div></div>
+      <div class="badge-actions">
+        <button class="btn btn-primary" id="downloadBadgeBtn">📥 Tải huy hiệu</button>
+        <button class="btn btn-secondary" id="shareBadgeBtn">📤 Chia sẻ</button>
+        <button class="btn btn-secondary" id="closeBadgeBtn">Đóng</button>
+      </div>
+      ${isFinal ? '<div id="finalGiftArea"></div>' : ''}
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const renderBadge = async () => {
+    const wrap = document.getElementById('badgeWrap');
+    const avatarUrl = await getAvatarUrl();
+    const fullUrl = avatarUrl
+      ? (avatarUrl.startsWith('data:') || avatarUrl.startsWith('http') ? avatarUrl : '/' + avatarUrl)
+      : '';
+    const canvas = await generateBadgeCanvas({
+      name: currentUser.name,
+      daysCompleted,
+      avatarUrl: fullUrl,
+      isFinal,
+    });
+    wrap.innerHTML = '';
+    wrap.appendChild(canvas);
+
+    document.getElementById('downloadBadgeBtn').onclick = () => {
+      downloadCanvas(canvas, `huy-hieu-${currentUser.name.replace(/\s+/g, '-')}-${daysCompleted}ngay.png`);
+    };
+    document.getElementById('shareBadgeBtn').onclick = () => shareCanvas(canvas, currentUser.name);
+  };
+
+  // Phần upload avatar nếu chưa có
+  const avatarArea = document.getElementById('avatarUploaderArea');
+  const hasAvatar = !!(await getAvatarUrl());
+  if (!hasAvatar) {
+    avatarArea.innerHTML = `
+      <div class="avatar-uploader">
+        <p style="margin-bottom: 10px; color: var(--gray-700);">Tải ảnh đại diện để xuất hiện trên huy hiệu (khuyến nghị):</p>
+        <label class="avatar-uploader-label" for="avatarFile">📷 Chọn ảnh</label>
+        <input type="file" id="avatarFile" accept="image/*" />
+      </div>
+    `;
+    document.getElementById('avatarFile').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        avatarArea.innerHTML = '<p style="padding: 14px; color: var(--gray-600);">Đang tải lên...</p>';
+        const dataUrl = await uploadAvatar(file);
+        currentUser.avatarDataUrl = dataUrl;
+        avatarArea.innerHTML = `<div class="avatar-uploader"><div class="avatar-preview-circle" style="background-image:url('${dataUrl}')"></div><p style="color: var(--green-700); font-weight:600;">✓ Đã lưu ảnh đại diện</p></div>`;
+        await renderBadge();
+      } catch (err) {
+        avatarArea.innerHTML = `<p style="color:var(--danger); padding: 10px;">Lỗi: ${err.message}</p>`;
+      }
+    });
+  }
+
+  await renderBadge();
+
+  // Quà tặng đặc biệt cuối chương trình
+  if (isFinal) {
+    try {
+      const r = await fetch(`${BACKEND_URL}?action=settings_get`);
+      const j = await r.json();
+      if (j.ok && j.settings) {
+        const s = j.settings;
+        const gArea = document.getElementById('finalGiftArea');
+        gArea.innerHTML = `
+          <div class="gift-card">
+            <h3>${s.gift_title || ''}</h3>
+            <p>${s.gift_description || ''}</p>
+            ${s.gift_image ? `<img src="${s.gift_image.startsWith('http') ? s.gift_image : '/' + s.gift_image}" alt="Quà tặng" />` : ''}
+            ${s.gift_link ? `<a href="${s.gift_link}" target="_blank" rel="noopener" class="btn btn-primary">🎁 Nhận quà ngay</a>` : ''}
+          </div>
+        `;
+      }
+    } catch (e) {}
+  }
+
+  document.getElementById('closeBadgeBtn').onclick = () => overlay.remove();
 }
 
 // ---------- Bootstrap ----------

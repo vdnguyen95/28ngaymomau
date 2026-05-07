@@ -383,6 +383,78 @@ body {
   justify-content: flex-end;
 }
 
+/* Badge celebration modal */
+.badge-modal-card {
+  max-width: 700px !important;
+  text-align: center;
+}
+.badge-canvas-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0;
+}
+.badge-canvas-wrap canvas {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+.badge-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.avatar-uploader {
+  background: var(--green-50);
+  border: 2px dashed var(--green-400);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  margin: 14px 0;
+}
+.avatar-uploader-label {
+  display: inline-block;
+  padding: 10px 20px;
+  background: var(--green-600);
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.avatar-uploader input[type=file] { display: none; }
+.avatar-preview-circle {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  margin: 10px auto;
+  background: var(--gray-200);
+  background-size: cover;
+  background-position: center;
+  border: 3px solid var(--green-500);
+}
+
+.gift-card {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border: 2px solid #f59e0b;
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  margin: 18px 0;
+}
+.gift-card h3 {
+  color: #92400e !important;
+  font-size: 22px !important;
+  margin-bottom: 10px !important;
+}
+.gift-card p { color: #78350f; }
+.gift-card img {
+  max-width: 100%;
+  border-radius: 12px;
+  margin: 12px 0;
+}
+
 /* Leaderboard */
 .leaderboard-podium {
   display: grid;
