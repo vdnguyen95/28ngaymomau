@@ -34,6 +34,10 @@ const SLOTS = [
   { key: "exercise", title: "2. Hình ảnh tập thể dục", desc: "Hoạt động thể chất bạn đã làm" },
 ];
 
+// Cooldown giữa 2 bài: chờ qua ngày mới (00:00 sáng hôm sau)
+// Đặt false để tắt cooldown.
+const COOLDOWN_NEXT_DAY = true;
+
 let currentUser = null;
 
 const el = {
@@ -227,6 +231,9 @@ function showApp() {
   // Tải nội dung bài học mới nhất từ backend (text + video YouTube admin chỉnh)
   fetchLessonOverrides().catch(() => {});
 
+  // Bật ticker cập nhật countdown mỗi giây
+  startCountdownTicker();
+
   el.userName.textContent = currentUser.name;
   el.userPhone.textContent = currentUser.phone;
   el.userAvatar.textContent = getInitials(currentUser.name);
@@ -237,21 +244,82 @@ function showApp() {
   el.historyView.classList.add("hidden");
   el.welcome.classList.remove("hidden");
 
-  el.startBtn.textContent =
-    currentUser.completed.length === 0
-      ? "Bắt đầu ngày 1"
-      : currentUser.completed.length >= 28
-      ? "Xem lại bài học"
-      : `Tiếp tục ngày ${currentUser.currentDay}`;
+  // Đổi nhãn nút theo trạng thái
+  const cd = getCooldownRemaining(currentUser.currentDay);
+  if (currentUser.completed.length === 0) {
+    el.startBtn.textContent = "Bắt đầu ngày 1";
+  } else if (currentUser.completed.length >= 28) {
+    el.startBtn.textContent = "Xem lại bài học";
+  } else if (cd !== null && cd > 0) {
+    el.startBtn.textContent = `⏱ Chờ mở khóa ngày ${currentUser.currentDay}`;
+  } else {
+    el.startBtn.textContent = `Tiếp tục ngày ${currentUser.currentDay}`;
+  }
 
   renderSidebar();
+}
+
+function getCompletionTime(day) {
+  // Lấy thời điểm user hoàn thành bài `day` (từ submissions hoặc history)
+  if (!currentUser) return null;
+  const sub = currentUser.submissions && currentUser.submissions[day];
+  if (sub && sub.at) return sub.at;
+  if (Array.isArray(currentUser.history)) {
+    const entries = currentUser.history.filter((h) => h.day === day && h.at);
+    if (entries.length) return Math.max(...entries.map((e) => e.at));
+  }
+  return null;
+}
+
+function getCooldownRemaining(day) {
+  // Trả về số ms còn lại đến khi mở khóa; null nếu không trong cooldown.
+  // Cơ chế: mở khóa vào 00:00:00 của ngày SAU ngày hoàn thành bài trước.
+  if (PREVIEW_MODE || day === 1 || !COOLDOWN_NEXT_DAY) return null;
+  if (!currentUser || !currentUser.completed.includes(day - 1)) return null;
+  const prevTime = getCompletionTime(day - 1);
+  if (!prevTime) return null;
+  const unlockAt = new Date(prevTime);
+  unlockAt.setDate(unlockAt.getDate() + 1);
+  unlockAt.setHours(0, 0, 0, 0);
+  return Math.max(0, unlockAt.getTime() - Date.now());
+}
+
+function getUnlockDate(day) {
+  // Trả về Date object thời điểm bài `day` sẽ mở khóa (hoặc null)
+  if (PREVIEW_MODE || day === 1 || !COOLDOWN_NEXT_DAY) return null;
+  if (!currentUser || !currentUser.completed.includes(day - 1)) return null;
+  const prevTime = getCompletionTime(day - 1);
+  if (!prevTime) return null;
+  const d = new Date(prevTime);
+  d.setDate(d.getDate() + 1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function formatUnlockDate(date) {
+  if (!date) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `00:00 ngày ${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
 }
 
 function isUnlocked(day) {
   if (!currentUser) return false;
   if (PREVIEW_MODE) return true;
   if (day === 1) return true;
-  return currentUser.completed.includes(day - 1);
+  if (!currentUser.completed.includes(day - 1)) return false;
+  // Check cooldown 24h
+  const remaining = getCooldownRemaining(day);
+  if (remaining !== null && remaining > 0) return false;
+  return true;
+}
+
+function formatCountdown(ms) {
+  if (ms <= 0) return "Sẵn sàng";
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 }
 
 function renderSidebar() {
@@ -259,21 +327,32 @@ function renderSidebar() {
   LESSONS.forEach((lesson) => {
     const unlocked = isUnlocked(lesson.day);
     const completed = currentUser.completed.includes(lesson.day);
+    const cooldown = getCooldownRemaining(lesson.day);
+    const inCooldown = cooldown !== null && cooldown > 0;
 
     const li = document.createElement("li");
     li.className = "lesson-item";
     if (!unlocked) li.classList.add("locked");
     if (completed) li.classList.add("completed");
     if (currentUser.currentDay === lesson.day) li.classList.add("active");
+    if (inCooldown) li.classList.add("cooldown");
 
-    const status = completed ? "✓" : unlocked ? lesson.day : "🔒";
+    let status;
+    if (completed) status = "✓";
+    else if (unlocked) status = lesson.day;
+    else if (inCooldown) status = "⏱";
+    else status = "🔒";
+
     li.innerHTML = `
       <span class="lesson-status">${status}</span>
       <span class="lesson-title">Ngày ${lesson.day}: ${lesson.title}</span>
+      ${inCooldown ? `<span class="lesson-countdown" data-cooldown-day="${lesson.day}">${formatCountdown(cooldown)}</span>` : ''}
     `;
 
     if (unlocked) {
       li.addEventListener("click", () => openLesson(lesson.day));
+    } else if (inCooldown) {
+      li.addEventListener("click", () => showCooldownView(lesson.day));
     }
     el.lessonList.appendChild(li);
   });
@@ -283,8 +362,68 @@ function renderSidebar() {
   el.progressFill.style.width = `${(done / 28) * 100}%`;
 }
 
+// Hiển thị màn hình chờ với đồng hồ đếm ngược
+function showCooldownView(day) {
+  el.welcome.classList.add("hidden");
+  el.quizView.classList.add("hidden");
+  el.historyView.classList.add("hidden");
+  el.lessonView.classList.remove("hidden");
+
+  const remaining = getCooldownRemaining(day) || 0;
+  const unlockDate = getUnlockDate(day);
+  const lesson = resolveLesson(day);
+  el.lessonView.innerHTML = `
+    <div class="cooldown-screen">
+      <div class="cooldown-icon">⏱</div>
+      <h2>Bài ngày ${day} sắp mở khóa</h2>
+      <p class="cooldown-subtitle">${lesson.title}</p>
+      <div class="cooldown-clock" data-cooldown-day="${day}">${formatCountdown(remaining)}</div>
+      ${unlockDate ? `<div class="cooldown-unlock-at">Mở khóa lúc <strong>${formatUnlockDate(unlockDate)}</strong></div>` : ""}
+      <p class="cooldown-hint">Mỗi ngày một bài — hãy dành thời gian áp dụng bài học hôm nay. Bài tiếp theo sẽ tự động mở khi sang ngày mới.</p>
+      <div class="lesson-actions" style="justify-content: center;">
+        <button class="btn btn-secondary" id="cooldownBackBtn">← Quay lại bài đã học</button>
+      </div>
+    </div>
+  `;
+  document.getElementById("cooldownBackBtn").addEventListener("click", () => {
+    const lastDone = Math.max(...(currentUser.completed.length ? currentUser.completed : [1]));
+    if (isUnlocked(lastDone)) openLesson(lastDone);
+    else { el.lessonView.classList.add("hidden"); el.welcome.classList.remove("hidden"); }
+  });
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// Cập nhật mọi đồng hồ đếm ngược trên trang mỗi giây
+let _countdownTickerStarted = false;
+function startCountdownTicker() {
+  if (_countdownTickerStarted) return;
+  _countdownTickerStarted = true;
+  setInterval(() => {
+    if (!currentUser) return;
+    const elements = document.querySelectorAll("[data-cooldown-day]");
+    if (!elements.length) return;
+    let needsRefresh = false;
+    elements.forEach((node) => {
+      const day = parseInt(node.dataset.cooldownDay, 10);
+      const remaining = getCooldownRemaining(day);
+      if (remaining === null || remaining <= 0) {
+        node.textContent = "Sẵn sàng";
+        needsRefresh = true;
+      } else {
+        node.textContent = formatCountdown(remaining);
+      }
+    });
+    if (needsRefresh) renderSidebar();
+  }, 1000);
+}
+
 function openLesson(day) {
-  if (!isUnlocked(day)) return;
+  if (!isUnlocked(day)) {
+    // Nếu bị khóa do cooldown → hiển thị đồng hồ đếm ngược
+    const remaining = getCooldownRemaining(day);
+    if (remaining !== null && remaining > 0) return showCooldownView(day);
+    return;
+  }
   currentUser.currentDay = day;
   persistCurrent();
   const lesson = resolveLesson(day);
@@ -465,6 +604,22 @@ function submitImages(day) {
 
   renderSidebar();
 
+  // Cooldown info
+  const nextDay = day + 1;
+  const nextRemaining = day < 28 ? getCooldownRemaining(nextDay) : null;
+  const inCooldown = nextRemaining !== null && nextRemaining > 0;
+  const nextUnlockDate = day < 28 ? getUnlockDate(nextDay) : null;
+  const cooldownHtml = (day < 28 && COOLDOWN_NEXT_DAY)
+    ? `
+      <div class="cooldown-info">
+        <div class="cooldown-info-title">⏱ Bài ngày ${nextDay} sẽ mở khóa sau:</div>
+        <div class="cooldown-clock" data-cooldown-day="${nextDay}">${formatCountdown(nextRemaining || 0)}</div>
+        ${nextUnlockDate ? `<div class="cooldown-info-when">Mở khóa lúc <strong>${formatUnlockDate(nextUnlockDate)}</strong></div>` : ""}
+        <div class="cooldown-info-hint">Mỗi ngày một bài — hãy áp dụng nội dung hôm nay vào cuộc sống. Bài tiếp theo sẽ tự mở khi sang ngày mới.</div>
+      </div>
+    `
+    : "";
+
   const resultHtml = `
     <div class="quiz-result pass">
       <div>🎉 Chúc mừng, bạn đã nộp báo cáo ngày ${day}!</div>
@@ -479,8 +634,9 @@ function submitImages(day) {
           <div class="gallery-label">Tập thể dục</div>
         </div>
       </div>
+      ${cooldownHtml}
       <div style="margin-top:18px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-        ${day < 28 ? `<button class="btn btn-primary" id="nextLessonBtn">Học ngày ${day + 1}</button>` : ""}
+        ${day < 28 && !inCooldown ? `<button class="btn btn-primary" id="nextLessonBtn">Học ngày ${day + 1}</button>` : ""}
         <button class="btn btn-secondary" id="viewHistoryBtn">Xem lịch sử</button>
         <button class="btn btn-secondary" id="reviewLessonBtn">Xem lại bài</button>
       </div>

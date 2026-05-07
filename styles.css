@@ -383,6 +383,102 @@ body {
   justify-content: flex-end;
 }
 
+/* Cooldown 24h */
+.lesson-item.cooldown {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  cursor: pointer;
+  opacity: 1;
+  color: #92400e;
+}
+.lesson-item.cooldown:hover { background: #fde68a; }
+.lesson-item.cooldown .lesson-status { background: #f59e0b; color: #fff; }
+.lesson-countdown {
+  font-size: 11px;
+  color: #92400e;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  background: rgba(245, 158, 11, 0.2);
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.cooldown-screen {
+  text-align: center;
+  padding: 40px 20px;
+}
+.cooldown-icon {
+  font-size: 64px;
+  margin-bottom: 12px;
+}
+.cooldown-screen h2 {
+  color: #92400e !important;
+  font-size: 26px !important;
+  margin-bottom: 4px !important;
+}
+.cooldown-subtitle {
+  color: var(--gray-600);
+  font-size: 15px;
+  margin-bottom: 20px;
+}
+.cooldown-clock {
+  display: inline-block;
+  padding: 18px 32px;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+  font-size: 36px;
+  font-weight: 800;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  border-radius: 14px;
+  margin: 16px 0;
+  box-shadow: 0 8px 22px rgba(245, 158, 11, 0.4);
+  letter-spacing: 1px;
+  min-width: 280px;
+}
+.cooldown-hint {
+  color: var(--gray-600);
+  font-size: 14px;
+  max-width: 480px;
+  margin: 14px auto 0;
+  line-height: 1.6;
+}
+
+.cooldown-info {
+  background: #fef3c7;
+  border: 2px solid #f59e0b;
+  border-radius: 12px;
+  padding: 18px;
+  margin: 16px 0;
+  text-align: center;
+}
+.cooldown-info-title {
+  font-weight: 700;
+  color: #92400e;
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+.cooldown-info .cooldown-clock {
+  margin: 8px 0;
+}
+.cooldown-info-hint {
+  color: #78350f;
+  font-size: 13px;
+  margin-top: 10px;
+}
+.cooldown-info-when, .cooldown-unlock-at {
+  color: #92400e;
+  font-size: 14px;
+  margin-top: 8px;
+}
+.cooldown-info-when strong, .cooldown-unlock-at strong {
+  color: #78350f;
+  font-weight: 700;
+}
+.cooldown-unlock-at {
+  margin-bottom: 12px;
+}
+
 /* Badge celebration modal */
 .badge-modal-card {
   max-width: 700px !important;
