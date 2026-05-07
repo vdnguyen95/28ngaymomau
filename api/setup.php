@@ -63,11 +63,23 @@ $statements = [
   ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
 ];
 
-// Idempotent ALTER TABLE: thêm cột avatar nếu chưa có
+$results = [];
+
+// 1. Tạo các bảng
+foreach ($statements as $s) {
+  try {
+    $db->exec($s);
+    $results[] = "✓ OK (CREATE TABLE)";
+  } catch (Exception $e) {
+    $results[] = "✗ " . $e->getMessage();
+  }
+}
+
+// 2. Thêm cột avatar nếu chưa có
 try { $db->exec("ALTER TABLE users ADD COLUMN avatar VARCHAR(500)"); $results[] = "✓ Thêm cột avatar vào users"; }
 catch (Exception $e) { $results[] = "⊙ Cột avatar đã tồn tại (OK)"; }
 
-// Khởi tạo nội dung quà tặng mặc định nếu chưa có
+// 3. Khởi tạo nội dung quà tặng mặc định nếu chưa có
 try {
   $stmt = $db->prepare("INSERT IGNORE INTO program_settings (key_name, value) VALUES (?, ?)");
   $stmt->execute(['gift_title', 'Quà tặng đặc biệt cho học viên hoàn thành 28 ngày']);
@@ -77,22 +89,14 @@ try {
   $results[] = "✓ Khởi tạo nội dung quà tặng";
 } catch (Exception $e) { $results[] = "⊙ Quà tặng đã có (OK)"; }
 
-$results = [];
-foreach ($statements as $s) {
-  try {
-    $db->exec($s);
-    $results[] = "✓ OK";
-  } catch (Exception $e) {
-    $results[] = "✗ " . $e->getMessage();
-  }
-}
-
-// Tạo thư mục uploads nếu chưa có
+// 4. Tạo thư mục uploads nếu chưa có
 $uploadDir = __DIR__ . '/../uploads';
 if (!is_dir($uploadDir)) {
   mkdir($uploadDir, 0755, true);
   file_put_contents($uploadDir . '/.htaccess', "Options -Indexes\n");
   $results[] = "✓ Tạo thư mục uploads/";
+} else {
+  $results[] = "⊙ Thư mục uploads/ đã có (OK)";
 }
 
 ?>
