@@ -2,7 +2,7 @@ const USERS_KEY = "momau28_users_v1";
 const SESSION_KEY = "momau28_session_v1";
 const VIEWS_KEY = "momau28_views_v1";
 const CONTACTS_KEY = "momau28_zalo_contacts_v1";
-const PROGRAM_NAME = "28 ngày giảm mỡ máu cùng dược sĩ Đạt";
+const PROGRAM_NAME = "28 ngày đồng hành thay đổi thói quen cùng dược sĩ Đạt";
 const ADMIN_ZALO = "0916839623";
 
 // =========================================================================
@@ -893,7 +893,7 @@ function openLeaderboard() {
   el.leaderboardView.innerHTML = `
     <div class="lesson-header">
       <span class="lesson-day">🏆 Bảng xếp hạng</span>
-      <h2>Top học viên 28 ngày giảm mỡ máu</h2>
+      <h2>Top học viên 28 ngày đồng hành thay đổi thói quen</h2>
       <p class="lesson-subtitle">Xem ai đang dẫn đầu và thi đua cùng họ nhé!</p>
     </div>
     ${myBanner}
@@ -1201,7 +1201,7 @@ function buildNotification() {
       weight: 1,
       kind: "milestone",
       icon: "🏆",
-      title: `<span class="n-name">${name}</span> đã hoàn thành trọn 28 ngày!`,
+      title: `<span class="n-name">${name}</span> đã hoàn thành trọn 28 ngày đồng hành!`,
     },
   ];
   const pool = [];
@@ -1355,13 +1355,104 @@ function resolveLesson(day) {
   const base = LESSONS[day - 1];
   const ov = LESSON_OVERRIDES[day];
   if (!ov) return base;
+  let body = base.body;
+  if (ov.body && ov.body.trim()) {
+    // Nếu admin lưu plain text, chuyển sang HTML khi hiển thị
+    body = plainTextToHtml(ov.body);
+  }
   return {
     ...base,
     title:    (ov.title    && ov.title.trim())    ? ov.title    : base.title,
     subtitle: (ov.subtitle && ov.subtitle.trim()) ? ov.subtitle : base.subtitle,
-    body:     (ov.body     && ov.body.trim())     ? ov.body     : base.body,
+    body,
     videoUrl: ov.video_url || "",
   };
+}
+
+// ---------- Plain text ⇄ HTML chuyển đổi ----------
+function plainTextToHtml(text) {
+  if (!text) return "";
+  // Nếu đã là HTML (có thẻ) → giữ nguyên
+  if (/<\w+[^>]*>/.test(text)) return text;
+
+  const formatInline = (s) =>
+    s
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>");
+
+  const lines = text.replace(/\r/g, "").split("\n");
+  const out = [];
+  let buffer = [];
+  let inList = false;
+
+  const flushPara = () => {
+    if (buffer.length) {
+      out.push("<p>" + buffer.join("<br>") + "</p>");
+      buffer = [];
+    }
+  };
+  const closeList = () => {
+    if (inList) { out.push("</ul>"); inList = false; }
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) {
+      flushPara();
+      closeList();
+      continue;
+    }
+    if (line.startsWith("## ")) {
+      flushPara(); closeList();
+      out.push("<h3>" + formatInline(line.slice(3)) + "</h3>");
+    } else if (line.startsWith("> ")) {
+      flushPara(); closeList();
+      out.push('<div class="callout">' + formatInline(line.slice(2)) + "</div>");
+    } else if (line.startsWith("- ")) {
+      flushPara();
+      if (!inList) { out.push("<ul>"); inList = true; }
+      out.push("<li>" + formatInline(line.slice(2)) + "</li>");
+    } else {
+      closeList();
+      buffer.push(formatInline(line));
+    }
+  }
+  flushPara();
+  closeList();
+  return out.join("\n");
+}
+
+function htmlToPlainText(html) {
+  if (!html) return "";
+  // Nếu không có thẻ HTML → đã là plain text
+  if (!/<\w+[^>]*>/.test(html)) return html;
+
+  return String(html)
+    .replace(/<h[1-6][^>]*>/gi, "\n## ")
+    .replace(/<\/h[1-6]>/gi, "\n\n")
+    .replace(/<div\s+class=["']callout["'][^>]*>/gi, "\n> ")
+    .replace(/<\/div>/gi, "\n\n")
+    .replace(/<ul[^>]*>/gi, "\n")
+    .replace(/<\/ul>/gi, "\n")
+    .replace(/<ol[^>]*>/gi, "\n")
+    .replace(/<\/ol>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "- ")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<strong[^>]*>|<b[^>]*>/gi, "**")
+    .replace(/<\/strong>|<\/b>/gi, "**")
+    .replace(/<em[^>]*>|<i[^>]*>/gi, "*")
+    .replace(/<\/em>|<\/i>/gi, "*")
+    .replace(/<p[^>]*>/gi, "")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function youTubeEmbed(url) {
@@ -1700,33 +1791,71 @@ async function renderLessonManager(pwd) {
 function openLessonEditor(day, pwd) {
   const base = LESSONS[day - 1];
   const ov = LESSON_OVERRIDES[day] || {};
+  // Hiển thị nội dung dưới dạng plain text (nếu là HTML thì tự chuyển đổi)
+  const initialBody = htmlToPlainText(ov.body && ov.body.trim() ? ov.body : base.body);
 
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
-    <div class="modal-card" style="max-width: 800px;">
+    <div class="modal-card" style="max-width: 820px;">
       <h2>Sửa bài ngày ${day}</h2>
-      <p class="modal-desc">Để trống một trường để dùng nội dung mặc định. Body hỗ trợ HTML (nếu copy từ Word, dán dưới dạng văn bản).</p>
+      <p class="modal-desc">Soạn nội dung dưới dạng văn bản thông thường — không cần viết HTML.</p>
       <form id="lessonEditorForm">
-        <div style="margin-bottom: 12px;">
-          <label style="font-weight:600; font-size:14px; display:block; margin-bottom:4px;">Tiêu đề</label>
-          <input type="text" id="le_title" style="width:100%; padding:10px; border:1.5px solid var(--gray-200); border-radius:8px;" value="${(ov.title || base.title || '').replace(/"/g, '&quot;')}" />
+
+        <div style="margin-bottom: 14px;">
+          <label style="font-weight:600; font-size:14px; display:block; margin-bottom:4px;">Tiêu đề bài học</label>
+          <input type="text" id="le_title" style="width:100%; padding:10px; border:1.5px solid var(--gray-200); border-radius:8px; font-size:15px;" value="${(ov.title || base.title || '').replace(/"/g, '&quot;')}" />
         </div>
-        <div style="margin-bottom: 12px;">
-          <label style="font-weight:600; font-size:14px; display:block; margin-bottom:4px;">Phụ đề</label>
+
+        <div style="margin-bottom: 14px;">
+          <label style="font-weight:600; font-size:14px; display:block; margin-bottom:4px;">Phụ đề (mô tả ngắn dưới tiêu đề)</label>
           <input type="text" id="le_subtitle" style="width:100%; padding:10px; border:1.5px solid var(--gray-200); border-radius:8px;" value="${(ov.subtitle || base.subtitle || '').replace(/"/g, '&quot;')}" />
         </div>
-        <div style="margin-bottom: 12px;">
+
+        <div style="margin-bottom: 14px;">
           <label style="font-weight:600; font-size:14px; display:block; margin-bottom:4px;">URL video YouTube (tùy chọn)</label>
           <input type="url" id="le_video" placeholder="https://www.youtube.com/watch?v=..." style="width:100%; padding:10px; border:1.5px solid var(--gray-200); border-radius:8px;" value="${ov.video_url || ''}" />
         </div>
-        <div style="margin-bottom: 12px;">
-          <label style="font-weight:600; font-size:14px; display:block; margin-bottom:4px;">Nội dung bài học (HTML)</label>
-          <textarea id="le_body" rows="14" style="width:100%; padding:12px; border:1.5px solid var(--gray-200); border-radius:8px; font-family: ui-monospace, monospace; font-size: 13px;">${(ov.body || base.body || '').trim()}</textarea>
+
+        <div style="margin-bottom: 8px;">
+          <label style="font-weight:600; font-size:14px; display:block; margin-bottom:4px;">Nội dung bài học</label>
+          <textarea id="le_body" rows="18" style="width:100%; padding:14px; border:1.5px solid var(--gray-200); border-radius:8px; font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; line-height: 1.6;" placeholder="Nhập nội dung bài học...">${initialBody.replace(/</g, '&lt;')}</textarea>
         </div>
-        <div style="display:flex; gap:10px; justify-content:flex-end;">
-          <button type="button" class="btn btn-secondary" id="le_cancel">Hủy</button>
-          <button type="submit" class="btn btn-primary">💾 Lưu</button>
+
+        <details style="background: var(--gray-50); padding: 12px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;">
+          <summary style="cursor: pointer; font-weight: 600; color: var(--green-700);">📖 Hướng dẫn định dạng (bấm để xem)</summary>
+          <div style="margin-top: 10px; color: var(--gray-700);">
+            <p style="margin-bottom: 8px;"><strong>Đoạn văn:</strong> Để 1 dòng trống giữa các đoạn.</p>
+            <p style="margin-bottom: 8px;"><strong>Tiêu đề mục:</strong> Bắt đầu dòng bằng <code style="background:#fff;padding:2px 6px;border-radius:4px;border:1px solid var(--gray-200);">## </code> (2 dấu thăng + dấu cách)</p>
+            <p style="margin-bottom: 8px;"><strong>Khung ghi chú quan trọng:</strong> Bắt đầu dòng bằng <code style="background:#fff;padding:2px 6px;border-radius:4px;border:1px solid var(--gray-200);">&gt; </code></p>
+            <p style="margin-bottom: 8px;"><strong>Mục liệt kê:</strong> Bắt đầu mỗi dòng bằng <code style="background:#fff;padding:2px 6px;border-radius:4px;border:1px solid var(--gray-200);">- </code></p>
+            <p style="margin-bottom: 8px;"><strong>Chữ đậm:</strong> Bọc trong <code style="background:#fff;padding:2px 6px;border-radius:4px;border:1px solid var(--gray-200);">**chữ**</code> · <strong>Chữ nghiêng:</strong> Bọc trong <code style="background:#fff;padding:2px 6px;border-radius:4px;border:1px solid var(--gray-200);">*chữ*</code></p>
+            <p style="background: var(--green-50); padding: 10px; border-radius: 6px; margin-top: 10px; color: var(--green-800);"><strong>Ví dụ:</strong></p>
+            <pre style="background: var(--gray-100); padding: 10px; border-radius: 6px; overflow-x: auto; font-size: 12px; margin-top: 4px;">## Mỡ máu là gì?
+
+Mỡ máu là chất béo lưu thông trong máu, bao gồm cholesterol và triglyceride.
+
+## Vai trò của mỡ máu
+
+- Cung cấp năng lượng cho tế bào
+- Tạo màng tế bào và **hormone**
+- Hỗ trợ hấp thu vitamin tan trong dầu
+
+> Lưu ý: Cơ thể cần mỡ máu, nhưng vượt ngưỡng sẽ gây xơ vữa.</pre>
+          </div>
+        </details>
+
+        <div style="display:flex; gap:10px; justify-content:space-between; align-items:center;">
+          <button type="button" class="btn btn-secondary btn-sm" id="le_preview">👁 Xem trước</button>
+          <div style="display:flex; gap:10px;">
+            <button type="button" class="btn btn-secondary" id="le_cancel">Hủy</button>
+            <button type="submit" class="btn btn-primary">💾 Lưu</button>
+          </div>
+        </div>
+
+        <div id="le_preview_area" style="display:none; margin-top:14px; padding:16px; background:#fff; border:1.5px solid var(--green-200); border-radius:10px;">
+          <div style="font-size:12px; color:var(--gray-600); text-transform:uppercase; font-weight:600; margin-bottom:8px;">Xem trước</div>
+          <div class="lesson-body" id="le_preview_body"></div>
         </div>
       </form>
       <button type="button" class="modal-close" id="le_close">×</button>
@@ -1737,6 +1866,15 @@ function openLessonEditor(day, pwd) {
   document.getElementById("le_cancel").onclick = close;
   document.getElementById("le_close").onclick = close;
 
+  // Xem trước
+  document.getElementById("le_preview").onclick = () => {
+    const area = document.getElementById("le_preview_area");
+    const body = document.getElementById("le_preview_body");
+    const plain = document.getElementById("le_body").value;
+    body.innerHTML = plainTextToHtml(plain);
+    area.style.display = area.style.display === "none" ? "block" : "none";
+  };
+
   document.getElementById("lessonEditorForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const payload = {
@@ -1744,7 +1882,7 @@ function openLessonEditor(day, pwd) {
       day,
       title:    document.getElementById("le_title").value,
       subtitle: document.getElementById("le_subtitle").value,
-      body:     document.getElementById("le_body").value,
+      body:     document.getElementById("le_body").value, // LƯU dạng plain text
       videoUrl: document.getElementById("le_video").value,
     };
     const r = await fetch(`${BACKEND_URL}?action=lesson_update`, {
@@ -2080,7 +2218,7 @@ async function generateBadgeCanvas({ name, daysCompleted, avatarUrl, isFinal }) 
   ctx.fillStyle = isFinal ? '#78350f' : '#fef9c3';
   const subY = nameY + (isFinal ? 60 : 50);
   ctx.fillText('Đã hoàn thành ' + daysCompleted + '/28 ngày', W/2, subY);
-  ctx.fillText('thay đổi mỡ máu cùng Dược sĩ Đạt', W/2, subY + (isFinal ? 42 : 38));
+  ctx.fillText('đồng hành thay đổi thói quen cùng Dược sĩ Đạt', W/2, subY + (isFinal ? 42 : 38));
 
   // Logo dưới cùng
   ctx.font = `${isFinal ? 24 : 22}px 'Segoe UI', Arial, sans-serif`;
@@ -2103,8 +2241,8 @@ async function shareCanvas(canvas, name) {
     if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'huyhieu.png', { type: 'image/png' })] })) {
       try {
         await navigator.share({
-          title: '28 ngày giảm mỡ máu cùng Dược sĩ Đạt',
-          text: `${name} đã hoàn thành chặng đường giảm mỡ máu! 🌿`,
+          title: '28 ngày đồng hành thay đổi thói quen cùng Dược sĩ Đạt',
+          text: `${name} đã hoàn thành chặng đường thay đổi thói quen! 🌿`,
           files: [new File([blob], 'huyhieu.png', { type: 'image/png' })],
         });
         return;

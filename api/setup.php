@@ -82,8 +82,8 @@ catch (Exception $e) { $results[] = "⊙ Cột avatar đã tồn tại (OK)"; }
 // 3. Khởi tạo nội dung quà tặng mặc định nếu chưa có
 try {
   $stmt = $db->prepare("INSERT IGNORE INTO program_settings (key_name, value) VALUES (?, ?)");
-  $stmt->execute(['gift_title', 'Quà tặng đặc biệt cho học viên hoàn thành 28 ngày']);
-  $stmt->execute(['gift_description', 'Chúc mừng bạn đã hoàn thành chương trình! Hãy nhắn Zalo dược sĩ Đạt 0916839623 để nhận quà tặng đặc biệt.']);
+  $stmt->execute(['gift_title', 'Quà tặng đặc biệt cho học viên hoàn thành 28 ngày đồng hành']);
+  $stmt->execute(['gift_description', 'Chúc mừng bạn đã hoàn thành chương trình 28 ngày đồng hành thay đổi thói quen! Hãy nhắn Zalo dược sĩ Đạt 0916839623 để nhận quà tặng đặc biệt.']);
   $stmt->execute(['gift_link', '']);
   $stmt->execute(['gift_image', '']);
   $results[] = "✓ Khởi tạo nội dung quà tặng";
