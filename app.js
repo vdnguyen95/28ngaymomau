@@ -1528,6 +1528,9 @@ async function promptAdminPassword() {
 
 // ---------- ADMIN DASHBOARD ----------
 
+// Lưu dữ liệu admin để các view chi tiết có thể tra cứu
+let _adminCache = null;
+
 async function renderAdmin() {
   document.getElementById("loginScreen").classList.add("hidden");
   document.getElementById("app").classList.add("hidden");
@@ -1574,6 +1577,13 @@ async function renderAdmin() {
           phone: e.phone,
         }));
       submissionsRaw = j.submissions || [];
+      // Cache để các view chi tiết tra cứu
+      _adminCache = {
+        allUsers,
+        submissions: submissionsRaw,
+        events: j.events || [],
+        contacts,
+      };
     } else if (j.error && j.error.includes("mật khẩu")) {
       clearAdminPassword();
       adminEl.classList.add("hidden");
@@ -1629,6 +1639,7 @@ async function renderAdmin() {
           <th>Đăng ký lúc</th>
           <th>Hoạt động cuối</th>
           <th>Liên hệ Zalo</th>
+          <th>Chi tiết</th>
         </tr>
       </thead>
       <tbody>
@@ -1636,7 +1647,9 @@ async function renderAdmin() {
           .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
           .map((u, idx) => {
             const completed = (u.completed || []).length;
-            const submissions = Object.keys(u.submissions || {}).length;
+            // Đếm số báo cáo thực tế từ DB nếu có
+            const userSubs = _adminCache ? _adminCache.submissions.filter(s => s.phone === u.phone) : [];
+            const submissions = userSubs.length || Object.keys(u.submissions || {}).length;
             const status = completed >= 28 ? "completed" : completed > 0 ? "learning" : "new";
             const statusLabel = completed >= 28 ? "Hoàn thành" : completed > 0 ? "Đang học" : "Mới đăng ký";
             const lastActivity = u.history && u.history.length
@@ -1662,6 +1675,7 @@ async function renderAdmin() {
                 <td>${userContacts > 0
                     ? `<span class="badge contact">${userContacts} lần</span>`
                     : `<span style="color:var(--gray-400)">—</span>`}</td>
+                <td><button class="btn btn-secondary btn-sm" data-view-user="${u.phone}">👁 Xem</button></td>
               </tr>
             `;
           })
@@ -1671,6 +1685,11 @@ async function renderAdmin() {
     </div>
   ` : `<div class="admin-empty">Chưa có học viên nào đăng ký trên thiết bị này.</div>`;
   document.getElementById("adminUsers").innerHTML = usersHtml;
+
+  // Gắn nút xem chi tiết
+  document.querySelectorAll("[data-view-user]").forEach((btn) => {
+    btn.addEventListener("click", () => showUserDetail(btn.dataset.viewUser));
+  });
 
   // Bảng liên hệ Zalo
   const contactsHtml = contacts.length ? `
@@ -2057,6 +2076,123 @@ function renderBadgeAchievers(allUsers) {
     <h2>🎖 Học viên đã đạt huy hiệu</h2>
     ${html || '<div class="admin-empty">Chưa có ai đạt mốc nào.</div>'}
   `;
+}
+
+// ---------- Admin: Chi tiết 1 học viên ----------
+function showUserDetail(phone) {
+  if (!_adminCache) return;
+  const user = _adminCache.allUsers.find((u) => u.phone === phone);
+  if (!user) return;
+
+  const submissions = _adminCache.submissions
+    .filter((s) => s.phone === phone)
+    .sort((a, b) => (a.day - b.day) || (new Date(a.submitted_at) - new Date(b.submitted_at)));
+  const events = _adminCache.events
+    .filter((e) => e.phone === phone)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 50);
+
+  const completedDays = user.completed || [];
+  const totalSubs = submissions.length;
+
+  // Lưới 28 ô tiến độ
+  const progressGridHtml = Array.from({ length: 28 }, (_, i) => {
+    const d = i + 1;
+    const done = completedDays.includes(d);
+    const subCount = submissions.filter((s) => s.day === d).length;
+    return `<div class="progress-cell ${done ? 'done' : ''}" title="Ngày ${d}${done ? ' · Đã hoàn thành' : ''}${subCount > 1 ? ' · ' + subCount + ' lần nộp' : ''}">${done ? '✓' : d}</div>`;
+  }).join("");
+
+  // Nhóm submissions theo ngày
+  const subsByDay = {};
+  submissions.forEach((s) => {
+    if (!subsByDay[s.day]) subsByDay[s.day] = [];
+    subsByDay[s.day].push(s);
+  });
+
+  const submissionsHtml = Object.keys(subsByDay)
+    .map((d) => parseInt(d, 10))
+    .sort((a, b) => a - b)
+    .map((d) => {
+      const list = subsByDay[d];
+      const lessonTitle = list[0].lesson_title || (LESSONS[d - 1] && LESSONS[d - 1].title) || "";
+      return `
+        <div class="user-submission-card">
+          <div class="user-submission-header">
+            <span class="user-submission-day">Ngày ${d}</span>
+            <span class="user-submission-title">${lessonTitle}</span>
+            ${list.length > 1 ? `<span class="badge contact">${list.length} lần nộp</span>` : ""}
+          </div>
+          ${list.map((s) => `
+            <div class="user-submission-entry">
+              <div class="user-submission-time">📅 ${formatDate(new Date(s.submitted_at + 'Z').getTime())}</div>
+              <div class="user-submission-images">
+                ${s.meal_image ? `<div><img src="/${s.meal_image}" alt="Bữa ăn" data-zoom /><div class="ud-label">🍽 Bữa ăn</div></div>` : '<div class="ud-empty">— Không có ảnh bữa ăn —</div>'}
+                ${s.exercise_image ? `<div><img src="/${s.exercise_image}" alt="Tập thể dục" data-zoom /><div class="ud-label">🏃 Tập thể dục</div></div>` : '<div class="ud-empty">— Không có ảnh tập thể dục —</div>'}
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }).join("");
+
+  const eventsHtml = events.length ? events.map((e) => {
+    const label = {
+      'zalo_contact': '💬 Liên hệ Zalo (' + (e.detail || '') + ')',
+    }[e.type] || e.type;
+    return `<li><span style="color:var(--gray-500); font-size:12px;">${formatDate(new Date(e.created_at + 'Z').getTime())}</span> · ${label}</li>`;
+  }).join("") : '<li style="color: var(--gray-400);">Chưa có hoạt động được ghi nhận</li>';
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-card user-detail-card">
+      <div class="user-detail-header">
+        <div class="user-detail-avatar">${getInitial(user.name || '?')}</div>
+        <div>
+          <h2 style="margin-bottom: 4px;">${user.name || '(Chưa có tên)'}</h2>
+          <div class="user-detail-meta">
+            <span>📞 ${user.phone}</span>
+            ${user.email ? `<span>📧 ${user.email}</span>` : ''}
+          </div>
+        </div>
+      </div>
+
+      <div class="user-detail-stats">
+        <div class="stat-card">
+          <div class="stat-value">${completedDays.length} / 28</div>
+          <div class="stat-label">Bài hoàn thành</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${totalSubs}</div>
+          <div class="stat-label">Lượt nộp báo cáo</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">Ngày ${user.currentDay || 1}</div>
+          <div class="stat-label">Đang học</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${user.createdAt ? formatDate(user.createdAt).split(' ')[0] : '—'}</div>
+          <div class="stat-label">Ngày đăng ký</div>
+        </div>
+      </div>
+
+      <h3 class="user-detail-section">📊 Tiến độ 28 ngày</h3>
+      <div class="progress-grid">${progressGridHtml}</div>
+
+      <h3 class="user-detail-section">📸 Báo cáo đã nộp</h3>
+      ${submissionsHtml || '<div class="admin-empty">Chưa có báo cáo nào.</div>'}
+
+      <h3 class="user-detail-section">📜 Hoạt động gần đây</h3>
+      <ul class="user-detail-events">${eventsHtml}</ul>
+
+      <button type="button" class="modal-close" id="ud_close" aria-label="Đóng">×</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById("ud_close").onclick = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  attachLightbox(overlay);
 }
 
 function exportCsv(users, contacts) {
